@@ -1,0 +1,6 @@
+{
+  "name": "Sistem Boarding Pencak Silat",
+  "description": "Sistem Boarding Live Display Pencak Silat untuk manajemen arena dan live update pesilat secara real-time.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
