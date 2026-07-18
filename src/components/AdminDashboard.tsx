@@ -2,7 +2,8 @@ import React, { useState, useEffect, useRef } from "react";
 import { 
   Users, Settings, LogOut, Plus, Trash2, Edit2, ShieldAlert, CheckCircle, 
   UserPlus, RefreshCw, Layers, Award, UsersRound, HelpCircle, LayoutGrid,
-  Play, Pause, RotateCcw, Tv, Clock, Timer, FileSpreadsheet, Upload, Download
+  Play, Pause, RotateCcw, Tv, Clock, Timer, FileSpreadsheet, Upload, Download,
+  Volume2, VolumeX
 } from "lucide-react";
 import * as XLSX from "xlsx";
 import { Pesilat, ConfigStatus } from "../types";
@@ -68,7 +69,211 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
   }, [timerDuration, isTimerInputFocused]);
 
   const [isEditMode, setIsEditMode] = useState<boolean>(false);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const processingTimeoutRef = useRef<string | null>(null);
+  const [isAudioEnabled, setIsAudioEnabled] = useState<boolean>(true);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState<'all' | 'selected' | null>(null);
+
+  const handleToggleSelect = (id: string) => {
+    setSelectedIds(prev => {
+      if (prev.includes(id)) {
+        return prev.filter(item => item !== id);
+      } else {
+        return [...prev, id];
+      }
+    });
+  };
+
+  const handleToggleSelectAll = (visibleItems: Pesilat[]) => {
+    const visibleIds = visibleItems.map(p => p.id);
+    setSelectedIds(prev => {
+      const allSelected = visibleIds.length > 0 && visibleIds.every(id => prev.includes(id));
+      if (allSelected) {
+        return prev.filter(id => !visibleIds.includes(id));
+      } else {
+        const newIds = visibleIds.filter(id => !prev.includes(id));
+        return [...prev, ...newIds];
+      }
+    });
+  };
+
+  const executeDeleteAll = async () => {
+    setError(null);
+    setSuccess(null);
+    setLoading(true);
+    setShowDeleteConfirm(null);
+    try {
+      const res = await fetch("/api/pesilat", { method: "DELETE" });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "Gagal menghapus semua data.");
+      }
+      setSuccess("Semua data pesilat berhasil dihapus.");
+      setSelectedIds([]);
+      await fetchInitialData(3, 1500, true);
+    } catch (err: any) {
+      setError(err.message || "Gagal menghapus semua data.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const executeDeleteSelected = async () => {
+    if (selectedIds.length === 0) return;
+    setError(null);
+    setSuccess(null);
+    setLoading(true);
+    setShowDeleteConfirm(null);
+    try {
+      const res = await fetch("/api/pesilat/delete-batch", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids: selectedIds })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "Gagal menghapus data terpilih.");
+      }
+      setSuccess(`Berhasil menghapus ${selectedIds.length} data pesilat terpilih.`);
+      setSelectedIds([]);
+      await fetchInitialData(3, 1500, true);
+    } catch (err: any) {
+      setError(err.message || "Gagal menghapus data terpilih.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDeleteAll = () => {
+    setShowDeleteConfirm('all');
+  };
+
+  const handleDeleteSelected = () => {
+    setShowDeleteConfirm('selected');
+  };
+  const activeUtterancesRef = useRef<any[]>([]);
+  const speechQueueRef = useRef<{ text: string; arenaNum: number; pesilatId: string }[]>([]);
+  const isSpeakingRef = useRef<boolean>(false);
+
+  // Process speech queue sequentially to prevent overlap and lockouts
+  const processQueue = () => {
+    if (!isAudioEnabled) {
+      speechQueueRef.current = [];
+      isSpeakingRef.current = false;
+      return;
+    }
+    if (isSpeakingRef.current) return;
+    if (speechQueueRef.current.length === 0) return;
+
+    const current = speechQueueRef.current[0];
+    isSpeakingRef.current = true;
+
+    if (!("speechSynthesis" in window)) {
+      isSpeakingRef.current = false;
+      speechQueueRef.current.shift();
+      return;
+    }
+
+    // Pastikan engine tidak ter-pause
+    try {
+      window.speechSynthesis.resume();
+    } catch (e) {
+      console.warn("Gagal resume speech:", e);
+    }
+
+    const utterance = new SpeechSynthesisUtterance(current.text);
+    
+    // Gunakan suara Bahasa Indonesia jika ada
+    const voices = window.speechSynthesis.getVoices();
+    const idVoice = voices.find(voice => voice.lang.startsWith("id") || voice.lang.includes("ID") || voice.lang.includes("id-ID"));
+    if (idVoice) {
+      utterance.voice = idVoice;
+    }
+    
+    utterance.lang = "id-ID";
+    utterance.rate = 0.85; // Sedikit santai agar terdengar berwibawa
+    utterance.pitch = 1.0;
+
+    // Hitung estimasi waktu bicara (misal 1 karakter ~75ms) ditambah buffer keamanan
+    const charCount = current.text.length;
+    const estimatedDurationMs = Math.max(4000, (charCount * 75) + 2000);
+
+    let isDone = false;
+    const finishUtterance = () => {
+      if (isDone) return;
+      isDone = true;
+      clearTimeout(safetyTimeout);
+      activeUtterancesRef.current = activeUtterancesRef.current.filter(u => u !== utterance);
+      isSpeakingRef.current = false;
+      speechQueueRef.current.shift();
+      // Sedikit jeda antar panggilan agar lebih berwibawa dan teratur
+      setTimeout(() => {
+        processQueue();
+      }, 1000);
+    };
+
+    // Safety timeout to reset speech queue if synthesis gets stuck in browser engine
+    const safetyTimeout = setTimeout(() => {
+      console.warn("SpeechSynthesis stuck, forcing queue skip...");
+      finishUtterance();
+    }, estimatedDurationMs);
+
+    activeUtterancesRef.current.push(utterance);
+
+    utterance.onend = () => {
+      console.log("Speech finished normally");
+      finishUtterance();
+    };
+
+    utterance.onerror = (e) => {
+      console.warn("Speech error:", e);
+      finishUtterance();
+    };
+    
+    try {
+      window.speechSynthesis.speak(utterance);
+    } catch (err) {
+      console.error("Gagal memanggil speechSynthesis.speak:", err);
+      finishUtterance();
+    }
+  };
+
+  const announceMatch = (arenaNum: number, p: Pesilat) => {
+    if (!isAudioEnabled) return;
+    if (!("speechSynthesis" in window)) {
+      console.warn("Speech Synthesis tidak didukung di browser ini.");
+      return;
+    }
+
+    const cleanKategori = p.kategori || "Tanding";
+    const cleanKelas = (p.kelas || "")
+      .replace(/kg/gi, " kilogram")
+      .replace(/\(/g, " ")
+      .replace(/\)/g, " ")
+      .replace(/-/g, " sampai ");
+    
+    const cleanGender = p.gender || "Putra";
+    const cleanNamaMerah = p.nama_pesilat ? p.nama_pesilat.trim() : "";
+    const cleanKontingenMerah = p.kontingen ? p.kontingen.trim() : "";
+    const cleanNamaBiru = p.nama_pesilat_biru ? p.nama_pesilat_biru.trim() : "";
+    const cleanKontingenBiru = p.kontingen_biru ? p.kontingen_biru.trim() : "";
+
+    let text = "";
+    if (cleanNamaBiru !== "") {
+      text = `Panggilan kepada partai nomor ${p.nomor_partai || ""}, di Gelanggang ${arenaNum}. Kategori ${cleanKategori}, ${cleanGender}, ${cleanKelas}. Di sudut merah, ${cleanNamaMerah} dari ${cleanKontingenMerah}, melawan di sudut biru, ${cleanNamaBiru} dari ${cleanKontingenBiru}. Selamat bertanding.`;
+    } else {
+      text = `Panggilan kepada partai nomor ${p.nomor_partai || ""}, di Gelanggang ${arenaNum}. Kategori ${cleanKategori}, ${cleanGender}, ${cleanKelas}. Pesilat, ${cleanNamaMerah} dari ${cleanKontingenMerah}. Selamat bertanding.`;
+    }
+
+    console.log("Enqueueing speech announcement:", text);
+
+    // Hindari double-enqueueing untuk partai yang sama persis di antrean
+    const isAlreadyQueued = speechQueueRef.current.some(item => item.pesilatId === p.id);
+    if (!isAlreadyQueued) {
+      speechQueueRef.current.push({ text, arenaNum, pesilatId: p.id });
+      processQueue();
+    }
+  };
 
   // Form States - Arena Setting
   const [inputJumlahArena, setInputJumlahArena] = useState<number>(3);
@@ -103,19 +308,23 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
     fetchInitialData();
   }, []);
 
-  const fetchConfig = async () => {
+  const fetchConfig = async (retriesLeft = 3, delayMs = 1500) => {
     try {
       const res = await fetch("/api/config-status");
       const data = await res.json();
       setConfig(data);
     } catch (err) {
-      console.error("Gagal mengambil konfigurasi:", err);
+      console.error(`Gagal mengambil konfigurasi (${retriesLeft} sisa):`, err);
+      if (retriesLeft > 0) {
+        setTimeout(() => fetchConfig(retriesLeft - 1, delayMs * 1.5), delayMs);
+      }
     }
   };
 
-  const fetchInitialData = async () => {
-    setLoading(true);
+  const fetchInitialData = async (retriesLeft = 3, delayMs = 1500, silent = false) => {
+    if (!silent) setLoading(true);
     try {
+      if (!silent) setError(null);
       // Ambil Pesilat
       const pesilatRes = await fetch("/api/pesilat");
       const pesilatData = await pesilatRes.json();
@@ -127,11 +336,18 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
       const count = arenaData && typeof arenaData.jumlah_arena === "number" ? arenaData.jumlah_arena : 3;
       setJumlahArena(count);
       setInputJumlahArena(count);
+      if (!silent) setLoading(false);
     } catch (err: any) {
-      setError("Gagal memuat data dari API Express.");
-      setPesilatList([]);
-    } finally {
-      setLoading(false);
+      console.error(`Gagal memuat data awal (${retriesLeft} sisa):`, err);
+      if (retriesLeft > 0) {
+        setTimeout(() => fetchInitialData(retriesLeft - 1, delayMs * 1.5, silent), delayMs);
+      } else {
+        if (!silent) {
+          setError("Gagal memuat data dari API Express setelah beberapa percobaan. Silakan coba klik tombol hubungkan kembali.");
+          setPesilatList([]);
+          setLoading(false);
+        }
+      }
     }
   };
 
@@ -163,11 +379,11 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
     try {
       const res = await fetch(`/api/pesilat/${id}/timeout`, { method: "PUT" });
       if (res.ok) {
-        await fetchInitialData();
+        await fetchInitialData(3, 1500, true);
       }
     } catch (err) {
       console.error("Gagal memproses timeout otomatis:", err);
-      await fetchInitialData();
+      await fetchInitialData(3, 1500, true);
     } finally {
       if (processingTimeoutRef.current === id) {
         processingTimeoutRef.current = null;
@@ -203,22 +419,29 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
   const handlePlayMatch = async (id: string) => {
     try {
       // Optimistic UI
-      setPesilatList(prev => prev.map(p => {
+      setPesilatList(prev => {
         const matchingItem = prev.find(item => item.id === id);
         const arenaNum = matchingItem ? matchingItem.arena : 1;
-        if (p.arena === arenaNum) {
-          return { ...p, is_playing: p.id === id, timer_running: p.id === id };
-        }
-        return p;
-      }));
+        return prev.map(p => {
+          if (p.arena === arenaNum) {
+            if (p.id === id) {
+              return { ...p, is_playing: true, timer_running: true, is_done: false };
+            } else if (p.is_playing) {
+              // Otomatis pindahkan partai lama di arena ini ke daftar Selesai
+              return { ...p, is_playing: false, timer_running: false, is_done: true };
+            }
+          }
+          return p;
+        });
+      });
 
       const res = await fetch(`/api/pesilat/${id}/play`, { method: "PUT" });
       if (res.ok) {
-        fetchInitialData();
+        fetchInitialData(3, 1500, true);
       }
     } catch (err) {
       console.error("Gagal mengaktifkan play:", err);
-      fetchInitialData();
+      fetchInitialData(3, 1500, true);
     }
   };
 
@@ -234,11 +457,11 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
 
       const res = await fetch(`/api/pesilat/${id}/stop`, { method: "PUT" });
       if (res.ok) {
-        fetchInitialData();
+        fetchInitialData(3, 1500, true);
       }
     } catch (err) {
       console.error("Gagal menonaktifkan play:", err);
-      fetchInitialData();
+      fetchInitialData(3, 1500, true);
     }
   };
 
@@ -262,11 +485,11 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
         body: JSON.stringify({ is_done: !currentDoneStatus })
       });
       if (res.ok) {
-        fetchInitialData();
+        fetchInitialData(3, 1500, true);
       }
     } catch (err) {
       console.error("Gagal mengubah status selesai:", err);
-      fetchInitialData();
+      fetchInitialData(3, 1500, true);
     }
   };
 
@@ -298,24 +521,30 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
         // Map header excel ke model Pesilat
         // Kita dukung nama kolom bahasa Indonesia/Inggris
         const mappedItems = rawData.map((row: any) => {
-          // Cari property dengan membandingkan lowercase
+          // Cari property dengan membandingkan lowercase & hanya menyisakan karakter alfanumerik (menghilangkan spasi, tanda kurung, dsb.)
           const getVal = (keys: string[]) => {
             const foundKey = Object.keys(row).find(k => 
-              keys.some(key => k.toLowerCase().replace(/[\s_-]/g, "") === key.toLowerCase().replace(/[\s_-]/g, ""))
+              keys.some(key => k.toLowerCase().replace(/[^a-z0-9]/g, "") === key.toLowerCase().replace(/[^a-z0-9]/g, ""))
             );
             return foundKey ? row[foundKey] : undefined;
           };
 
+          const getValStr = (keys: string[], defaultVal = "") => {
+            const val = getVal(keys);
+            if (val === undefined || val === null) return defaultVal;
+            return String(val).trim();
+          };
+
           const arenaVal = Number(getVal(["arena", "gelanggang"])) || 1;
-          const nomorPartai = String(getVal(["nomorpartai", "partai", "no_partai", "nomor_partai", "no", "no_partai"]) ?? "01");
-          const namaMerah = String(getVal(["nama_pesilat", "namapesilat", "pesilat", "nama_merah", "merah_nama", "sudut_merah", "pesilat_merah", "sudutmerahnama"]) ?? "");
-          const kontingenMerah = String(getVal(["kontingen", "kontingen_merah", "sudut_merah_kontingen", "merah_kontingen", "kontingen_merah", "sudutmerahkontingen"]) ?? "");
-          const namaBiru = String(getVal(["nama_pesilat_biru", "namapesilatbiru", "pesilat_biru", "nama_biru", "biru_nama", "sudut_biru", "pesilat_biru", "sudutbirunama"]) ?? "");
-          const kontingenBiru = String(getVal(["kontingen_biru", "sudut_biru_kontingen", "biru_kontingen", "sudutbirukontingen"]) ?? "");
-          const kelas = String(getVal(["kelas", "kelas_tanding"]) ?? "Kelas A");
-          const kategori = String(getVal(["kategori", "kategori_tanding"]) ?? "Tanding");
-          const gender = String(getVal(["gender", "jenis_kelamin", "putra_putri", "sex"]) ?? "Putra");
-          const duration = Number(getVal(["timer_duration", "durasi", "waktu", "duration"])) || (kategori.toLowerCase().includes("tunggal") || kategori.toLowerCase().includes("ganda") || kategori.toLowerCase().includes("regu") || kategori.toLowerCase() === "seni" ? 180 : 120);
+          const nomorPartai = getValStr(["nomorpartai", "partai", "nopartai", "no", "number", "nomor_partai"], "01");
+          const namaMerah = getValStr(["sudutmerahnamapesilat", "nama_pesilat", "namapesilat", "pesilat", "nama_merah", "merah_nama", "sudut_merah", "pesilat_merah", "sudutmerahnama"]);
+          const kontingenMerah = getValStr(["sudutmerahkontingen", "kontingen", "kontingen_merah", "sudut_merah_kontingen", "merah_kontingen", "kontingen_merah", "sudutmerahkontingen"]);
+          const namaBiru = getValStr(["sudutbirunamapesilat", "nama_pesilat_biru", "namapesilatbiru", "pesilat_biru", "nama_biru", "biru_nama", "sudut_biru", "pesilat_biru", "sudutbirunama"]);
+          const kontingenBiru = getValStr(["sudutbirukontingen", "kontingen_biru", "sudut_biru_kontingen", "biru_kontingen", "sudutbirukontingen"]);
+          const kelas = getValStr(["kelas", "kelas_tanding", "kelastanding"], "Kelas A");
+          const kategori = getValStr(["kategori", "kategori_tanding", "kategoritanding"], "Tanding");
+          const gender = getValStr(["gender", "jenis_kelamin", "putra_putri", "sex", "putraputri", "jeniskelamin"], "Putra");
+          const duration = Number(getVal(["timer_duration", "durasi", "waktu", "duration", "durasitimerdetik", "durasitimer"])) || (kategori.toLowerCase().includes("tunggal") || kategori.toLowerCase().includes("ganda") || kategori.toLowerCase().includes("regu") || kategori.toLowerCase() === "seni" ? 180 : 120);
 
           return {
             arena: arenaVal,
@@ -370,10 +599,10 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
     const templateData = [
       {
         "Nomor Partai": "01",
-        "Sudut Merah (Nama Pesilat)": "Hilal Syahril",
-        "Sudut Merah (Kontingen)": "PBR Jakarta",
         "Sudut Biru (Nama Pesilat)": "Zainal Abidin",
         "Sudut Biru (Kontingen)": "Tapak Suci Bandung",
+        "Sudut Merah (Nama Pesilat)": "Hilal Syahril",
+        "Sudut Merah (Kontingen)": "PBR Jakarta",
         "Kelas": "Kelas A (45kg - 50kg)",
         "Kategori": "Tanding",
         "Gender": "Putra",
@@ -382,10 +611,10 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
       },
       {
         "Nomor Partai": "02",
-        "Sudut Merah (Nama Pesilat)": "Siti Aminah",
-        "Sudut Merah (Kontingen)": "Kera Sakti Surabaya",
         "Sudut Biru (Nama Pesilat)": "Dewi Sartika",
         "Sudut Biru (Kontingen)": "Siliwangi Bogor",
+        "Sudut Merah (Nama Pesilat)": "Siti Aminah",
+        "Sudut Merah (Kontingen)": "Kera Sakti Surabaya",
         "Kelas": "Kelas B (50kg - 55kg)",
         "Kategori": "Tanding",
         "Gender": "Putri",
@@ -394,10 +623,10 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
       },
       {
         "Nomor Partai": "03",
-        "Sudut Merah (Nama Pesilat)": "Grup Seni Tunggal Pria",
-        "Sudut Merah (Kontingen)": "Seni DKI Jakarta",
         "Sudut Biru (Nama Pesilat)": "",
         "Sudut Biru (Kontingen)": "",
+        "Sudut Merah (Nama Pesilat)": "Grup Seni Tunggal Pria",
+        "Sudut Merah (Kontingen)": "Seni DKI Jakarta",
         "Kelas": "Seni Tunggal",
         "Kategori": "Tunggal",
         "Gender": "Putra",
@@ -411,10 +640,10 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
     // Atur lebar kolom agar rapi
     ws["!cols"] = [
       { wch: 15 }, // Nomor Partai
-      { wch: 30 }, // Sudut Merah (Nama Pesilat)
-      { wch: 25 }, // Sudut Merah (Kontingen)
       { wch: 30 }, // Sudut Biru (Nama Pesilat)
       { wch: 25 }, // Sudut Biru (Kontingen)
+      { wch: 30 }, // Sudut Merah (Nama Pesilat)
+      { wch: 25 }, // Sudut Merah (Kontingen)
       { wch: 20 }, // Kelas
       { wch: 15 }, // Kategori
       { wch: 10 }, // Gender
@@ -435,10 +664,10 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
 
     const exportData = pesilatList.map(p => ({
       "Nomor Partai": p.nomor_partai || "00",
-      "Sudut Merah (Nama Pesilat)": p.nama_pesilat || "",
-      "Sudut Merah (Kontingen)": p.kontingen || "",
       "Sudut Biru (Nama Pesilat)": p.nama_pesilat_biru || "",
       "Sudut Biru (Kontingen)": p.kontingen_biru || "",
+      "Sudut Merah (Nama Pesilat)": p.nama_pesilat || "",
+      "Sudut Merah (Kontingen)": p.kontingen || "",
       "Kelas": p.kelas || "",
       "Kategori": p.kategori || "",
       "Gender": p.gender || "",
@@ -494,11 +723,11 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
         body: JSON.stringify(payload)
       });
       if (!res.ok) {
-        fetchInitialData();
+        fetchInitialData(3, 1500, true);
       }
     } catch (err) {
       console.error("Gagal mengupdate timer:", err);
-      fetchInitialData();
+      fetchInitialData(3, 1500, true);
     }
   };
 
@@ -552,7 +781,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
 
       setSuccess(isEditMode ? "Data pesilat berhasil diperbarui!" : "Pesilat/partai baru berhasil ditambahkan!");
       resetFormPesilat();
-      fetchInitialData(); // Refresh list
+      fetchInitialData(3, 1500, true); // Refresh list
     } catch (err: any) {
       setError(err.message || "Gagal memproses aksi.");
     }
@@ -596,7 +825,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
       }
 
       setSuccess(`Pesilat "${nama}" berhasil dihapus.`);
-      fetchInitialData();
+      fetchInitialData(3, 1500, true);
     } catch (err: any) {
       setError(err.message);
     }
@@ -648,6 +877,28 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
     setArena(1);
     setTimerDuration(120);
   };
+
+  const filteredPesilatList = [...pesilatList]
+    .filter(p => {
+      if (filterStatus === "queue") return !p.is_done;
+      if (filterStatus === "done") return p.is_done;
+      return true;
+    })
+    .sort((a, b) => {
+      if (a.arena !== b.arena) {
+        return a.arena - b.arena;
+      }
+      const numA = parseFloat(a.nomor_partai);
+      const numB = parseFloat(b.nomor_partai);
+      const isNumA = !isNaN(numA) && isFinite(numA);
+      const isNumB = !isNaN(numB) && isFinite(numB);
+      if (isNumA && isNumB) {
+        return numA - numB;
+      }
+      if (isNumA) return -1;
+      if (isNumB) return 1;
+      return a.nomor_partai.localeCompare(b.nomor_partai, undefined, { numeric: true, sensitivity: "base" });
+    });
 
   return (
     <div className="min-h-screen bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-slate-900 to-slate-950 text-white font-sans">
@@ -706,9 +957,17 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
 
         {/* Feedback Alerts */}
         {error && (
-          <div className="mb-4 bg-rose-950/40 border border-rose-800 text-rose-200 text-sm p-4 rounded-2xl flex items-center gap-2">
-            <ShieldAlert className="w-5 h-5 text-rose-500 shrink-0" />
-            <span>{error}</span>
+          <div className="mb-4 bg-rose-950/40 border border-rose-800 text-rose-200 text-sm p-4 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <ShieldAlert className="w-5 h-5 text-rose-500 shrink-0" />
+              <span>{error}</span>
+            </div>
+            <button
+              onClick={() => { fetchConfig(); fetchInitialData(); }}
+              className="px-3 py-1 bg-rose-900 hover:bg-rose-800 text-white rounded-lg transition text-xs font-bold cursor-pointer shrink-0"
+            >
+              Hubungkan Kembali
+            </button>
           </div>
         )}
         {success && (
@@ -772,40 +1031,6 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                   />
                 </div>
 
-                {/* SUDUT MERAH GROUP */}
-                <div className="border-l-4 border-red-500 pl-3 py-2.5 bg-red-500/5 rounded-r-xl space-y-3">
-                  <div className="text-[10px] font-black text-red-400 uppercase tracking-widest font-mono">
-                    SUDUT MERAH
-                  </div>
-                  <div>
-                    <label className="block text-[9px] font-bold text-slate-400 mb-1 uppercase tracking-widest font-mono">
-                      Nama Pesilat Merah
-                    </label>
-                    <input
-                      type="text"
-                      value={namaPesilat}
-                      onChange={(e) => setNamaPesilat(e.target.value)}
-                      placeholder="Nama lengkap atlet sudut merah"
-                      className="w-full bg-slate-950 border border-slate-800 focus:border-red-500 focus:ring-1 focus:ring-red-500 text-white rounded-xl px-3 py-2 outline-none transition"
-                      required
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-[9px] font-bold text-slate-400 mb-1 uppercase tracking-widest font-mono">
-                      Kontingen Merah
-                    </label>
-                    <input
-                      type="text"
-                      value={kontingen}
-                      onChange={(e) => setKontingen(e.target.value)}
-                      placeholder="Asal Kontingen / Perguruan"
-                      className="w-full bg-slate-950 border border-slate-800 focus:border-red-500 focus:ring-1 focus:ring-red-500 text-white rounded-xl px-3 py-2 outline-none transition"
-                      required
-                    />
-                  </div>
-                </div>
-
                 {/* SUDUT BIRU GROUP */}
                 <div className="border-l-4 border-blue-500 pl-3 py-2.5 bg-blue-500/5 rounded-r-xl space-y-3">
                   <div className="text-[10px] font-black text-blue-400 uppercase tracking-widest font-mono">
@@ -834,6 +1059,40 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                       onChange={(e) => setKontingenBiru(e.target.value)}
                       placeholder="Asal Kontingen / Perguruan (opsional)"
                       className="w-full bg-slate-950 border border-slate-800 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-white rounded-xl px-3 py-2 outline-none transition"
+                    />
+                  </div>
+                </div>
+
+                {/* SUDUT MERAH GROUP */}
+                <div className="border-l-4 border-red-500 pl-3 py-2.5 bg-red-500/5 rounded-r-xl space-y-3">
+                  <div className="text-[10px] font-black text-red-400 uppercase tracking-widest font-mono">
+                    SUDUT MERAH
+                  </div>
+                  <div>
+                    <label className="block text-[9px] font-bold text-slate-400 mb-1 uppercase tracking-widest font-mono">
+                      Nama Pesilat Merah (Wajib)
+                    </label>
+                    <input
+                      type="text"
+                      value={namaPesilat}
+                      onChange={(e) => setNamaPesilat(e.target.value)}
+                      placeholder="Nama lengkap atlet sudut merah"
+                      className="w-full bg-slate-950 border border-slate-800 focus:border-red-500 focus:ring-1 focus:ring-red-500 text-white rounded-xl px-3 py-2 outline-none transition"
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[9px] font-bold text-slate-400 mb-1 uppercase tracking-widest font-mono">
+                      Kontingen Merah (Wajib)
+                    </label>
+                    <input
+                      type="text"
+                      value={kontingen}
+                      onChange={(e) => setKontingen(e.target.value)}
+                      placeholder="Asal Kontingen / Perguruan"
+                      className="w-full bg-slate-950 border border-slate-800 focus:border-red-500 focus:ring-1 focus:ring-red-500 text-white rounded-xl px-3 py-2 outline-none transition"
+                      required
                     />
                   </div>
                 </div>
@@ -1068,6 +1327,15 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
 
                                 {/* Stop Display */}
                                 <button
+                                  onClick={() => announceMatch(arenaNum, activePesilat)}
+                                  className="p-1.5 bg-amber-500 hover:bg-amber-600 text-neutral-950 font-black border border-amber-400/50 rounded-lg transition cursor-pointer text-[10px] font-mono tracking-widest uppercase px-2.5 py-1 flex items-center gap-1"
+                                  title="Panggil Suara Pengumuman Atlit"
+                                >
+                                  <Volume2 className="w-3.5 h-3.5" />
+                                  <span>PANGGIL</span>
+                                </button>
+
+                                <button
                                   onClick={() => handleStopMatch(activePesilat.id)}
                                   className="p-1.5 bg-red-600/20 hover:bg-red-600/35 text-red-400 border border-red-600/30 rounded-lg transition cursor-pointer text-[10px] font-black font-mono tracking-widest uppercase px-2.5 py-1"
                                   title="Hentikan Display Monitor"
@@ -1180,87 +1448,95 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                   </div>
                 </div>
 
-                {/* Status Filter Tabs */}
-                <div className="flex gap-1 mb-4 bg-slate-950 p-1 rounded-2xl border border-slate-800 w-fit">
-                  <button
-                    onClick={() => setFilterStatus("queue")}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-black transition flex items-center gap-1.5 cursor-pointer ${
-                      filterStatus === "queue"
-                        ? "bg-indigo-600 text-white shadow"
-                        : "text-slate-400 hover:text-white"
-                    }`}
-                  >
-                    Antrean ({pesilatList.filter(p => !p.is_done).length})
-                  </button>
-                  <button
-                    onClick={() => setFilterStatus("done")}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-black transition flex items-center gap-1.5 cursor-pointer ${
-                      filterStatus === "done"
-                        ? "bg-indigo-600 text-white shadow"
-                        : "text-slate-400 hover:text-white"
-                    }`}
-                  >
-                    Selesai ({pesilatList.filter(p => p.is_done).length})
-                  </button>
-                  <button
-                    onClick={() => setFilterStatus("all")}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-black transition flex items-center gap-1.5 cursor-pointer ${
-                      filterStatus === "all"
-                        ? "bg-indigo-600 text-white shadow"
-                        : "text-slate-400 hover:text-white"
-                    }`}
-                  >
-                    Semua ({pesilatList.length})
-                  </button>
+                {/* Status Filter Tabs & Bulk Action Buttons */}
+                <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+                  <div className="flex gap-1 bg-slate-950 p-1 rounded-2xl border border-slate-800 w-fit">
+                    <button
+                      onClick={() => setFilterStatus("queue")}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-black transition flex items-center gap-1.5 cursor-pointer ${
+                        filterStatus === "queue"
+                          ? "bg-indigo-600 text-white shadow"
+                          : "text-slate-400 hover:text-white"
+                      }`}
+                    >
+                      Antrean ({pesilatList.filter(p => !p.is_done).length})
+                    </button>
+                    <button
+                      onClick={() => setFilterStatus("done")}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-black transition flex items-center gap-1.5 cursor-pointer ${
+                        filterStatus === "done"
+                          ? "bg-indigo-600 text-white shadow"
+                          : "text-slate-400 hover:text-white"
+                      }`}
+                    >
+                      Selesai ({pesilatList.filter(p => p.is_done).length})
+                    </button>
+                    <button
+                      onClick={() => setFilterStatus("all")}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-black transition flex items-center gap-1.5 cursor-pointer ${
+                        filterStatus === "all"
+                          ? "bg-indigo-600 text-white shadow"
+                          : "text-slate-400 hover:text-white"
+                      }`}
+                    >
+                      Semua ({pesilatList.length})
+                    </button>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    {selectedIds.size > 0 && (
+                      <button
+                        onClick={handleDeleteSelected}
+                        className="px-3 py-1.5 bg-red-950/40 hover:bg-red-950/80 border border-red-500/30 hover:border-red-500 text-red-200 transition text-xs font-black flex items-center gap-1.5 rounded-xl cursor-pointer shadow-lg"
+                      >
+                        <Trash2 className="w-3.5 h-3.5 text-red-400" />
+                        <span>Hapus Ceklist ({selectedIds.size})</span>
+                      </button>
+                    )}
+                    <button
+                      onClick={handleDeleteAll}
+                      className="px-3 py-1.5 bg-slate-950 hover:bg-red-950/20 border border-slate-800 hover:border-red-500/20 text-slate-400 hover:text-red-400 transition text-xs font-black flex items-center gap-1.5 rounded-xl cursor-pointer"
+                    >
+                      <Trash2 className="w-3.5 h-3.5 text-slate-400 hover:text-red-400" />
+                      <span>Hapus Semua</span>
+                    </button>
+                  </div>
                 </div>
 
-                {/* Responsive Table */}
-                <div className="overflow-x-auto rounded-2xl border border-slate-800">
-                  <table className="w-full text-left border-collapse text-xs sm:text-sm">
+                {/* Responsive Table Wrapper with hidden overflow to fit the screen without scrollbars */}
+                <div className="overflow-hidden rounded-2xl border border-slate-800">
+                  <table className="w-full text-left border-collapse text-xs sm:text-sm table-fixed">
                     <thead>
-                      <tr className="bg-slate-950 border-b border-slate-800 text-slate-400 font-mono text-[10px] uppercase tracking-wider">
-                        <th className="p-3">Nama / Kontingen (Sudut)</th>
-                        <th className="p-3">Gender / Kategori</th>
-                        <th className="p-3">Kelas</th>
-                        <th className="p-3 text-center">Arena</th>
-                        <th className="p-3 text-right">Aksi & Live</th>
+                      <tr className="bg-slate-950 border-b border-slate-800 text-slate-400 font-mono text-[9px] sm:text-[10px] uppercase tracking-wider">
+                        <th className="p-2 sm:p-3 w-[8%] sm:w-[7%] text-center">
+                          <input
+                            type="checkbox"
+                            checked={filteredPesilatList.length > 0 && filteredPesilatList.every(p => selectedIds.includes(p.id))}
+                            onChange={() => handleToggleSelectAll(filteredPesilatList)}
+                            className="w-4 h-4 rounded border-slate-800 text-indigo-600 focus:ring-indigo-500 bg-slate-900 cursor-pointer"
+                            title="Pilih/Batal Pilih Semua"
+                          />
+                        </th>
+                        <th className="p-2 sm:p-3 w-[27%] sm:w-[31%]">Nama / Kontingen (Sudut)</th>
+                        <th className="p-2 sm:p-3 w-[15%] sm:w-[14%]">Gender/Kat</th>
+                        <th className="p-2 sm:p-3 w-[14%] sm:w-[13%]">Kelas</th>
+                        <th className="p-2 sm:p-3 text-center w-[11%] sm:w-[10%]">Arena</th>
+                        <th className="p-2 sm:p-3 text-right w-[25%] sm:w-[25%]">Aksi</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-800/60">
                       {loading ? (
                         <tr>
-                          <td colSpan={5} className="p-8 text-center text-slate-500">
+                          <td colSpan={6} className="p-8 text-center text-slate-500">
                             <RefreshCw className="w-5 h-5 animate-spin mx-auto mb-2 text-indigo-400" />
                             Memuat data pesilat...
                           </td>
                         </tr>
                       ) : (() => {
-                        const filteredPesilatList = [...pesilatList]
-                          .filter(p => {
-                            if (filterStatus === "queue") return !p.is_done;
-                            if (filterStatus === "done") return p.is_done;
-                            return true;
-                          })
-                          .sort((a, b) => {
-                            if (a.arena !== b.arena) {
-                              return a.arena - b.arena;
-                            }
-                            const numA = parseFloat(a.nomor_partai);
-                            const numB = parseFloat(b.nomor_partai);
-                            const isNumA = !isNaN(numA) && isFinite(numA);
-                            const isNumB = !isNaN(numB) && isFinite(numB);
-                            if (isNumA && isNumB) {
-                              return numA - numB;
-                            }
-                            if (isNumA) return -1;
-                            if (isNumB) return 1;
-                            return a.nomor_partai.localeCompare(b.nomor_partai, undefined, { numeric: true, sensitivity: "base" });
-                          });
-
                         if (filteredPesilatList.length === 0) {
                           return (
                             <tr>
-                              <td colSpan={5} className="p-8 text-center text-slate-500 font-mono">
+                              <td colSpan={6} className="p-8 text-center text-slate-500 font-mono">
                                 {filterStatus === "queue"
                                   ? "Tidak ada partai dalam antrean."
                                   : filterStatus === "done"
@@ -1272,80 +1548,98 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                         }
 
                         return filteredPesilatList.map((p) => (
-                          <tr key={p.id} className={`hover:bg-slate-850/40 transition ${p.is_playing ? "bg-indigo-500/5" : ""}`}>
-                            <td className="p-3">
-                              <div className="flex items-start gap-2.5">
-                                <span className="bg-indigo-950 text-indigo-400 px-2 py-0.5 rounded font-mono font-black text-[10px] border border-indigo-500/20 uppercase shrink-0 mt-0.5">
+                          <tr key={p.id} className={`hover:bg-slate-850/40 transition ${p.is_playing ? "bg-indigo-500/5" : ""} ${selectedIds.includes(p.id) ? "bg-slate-800/20" : ""}`}>
+                            <td className="p-2 sm:p-3 text-center">
+                              <input
+                                type="checkbox"
+                                checked={selectedIds.includes(p.id)}
+                                onChange={() => handleToggleSelect(p.id)}
+                                className="w-4 h-4 rounded border-slate-800 text-indigo-600 focus:ring-indigo-500 bg-slate-950 cursor-pointer"
+                              />
+                            </td>
+                            <td className="p-2 sm:p-3 min-w-0">
+                              <div className="flex items-start gap-1.5 sm:gap-2.5 min-w-0">
+                                <span className="bg-indigo-950 text-indigo-400 px-1.5 py-0.5 rounded font-mono font-black text-[9px] sm:text-[10px] border border-indigo-500/20 uppercase shrink-0 mt-0.5">
                                   P-{p.nomor_partai || "01"}
                                 </span>
-                                <div className="space-y-1.5 min-w-0 flex-1">
-                                  {/* Merah Corner */}
-                                  <div className="flex items-center gap-1.5">
-                                    <span className="w-1.5 h-1.5 bg-red-500 rounded-full shrink-0" />
-                                    <p className="font-bold text-white uppercase truncate text-xs">{p.nama_pesilat}</p>
-                                    <span className="text-[10px] text-slate-400 font-medium truncate">({p.kontingen})</span>
-                                  </div>
-                                  
+                                <div className="space-y-1 min-w-0 flex-1">
                                   {/* Biru Corner */}
                                   {p.nama_pesilat_biru && (
-                                    <div className="flex items-center gap-1.5 border-t border-slate-800/50 pt-1">
+                                    <div className="flex items-center gap-1 min-w-0">
                                       <span className="w-1.5 h-1.5 bg-blue-500 rounded-full shrink-0" />
-                                      <p className="font-bold text-slate-300 uppercase truncate text-xs">{p.nama_pesilat_biru}</p>
-                                      <span className="text-[10px] text-slate-400 font-medium truncate">({p.kontingen_biru})</span>
+                                      <span className="font-bold text-slate-300 uppercase truncate text-[11px] sm:text-xs block max-w-[80px] xs:max-w-[120px] sm:max-w-none">{p.nama_pesilat_biru}</span>
+                                      <span className="text-[9px] sm:text-[10px] text-slate-400 font-medium truncate shrink-0">({p.kontingen_biru})</span>
                                     </div>
                                   )}
+                                  
+                                  {/* Merah Corner */}
+                                  <div className={`flex items-center gap-1 min-w-0 ${p.nama_pesilat_biru ? "border-t border-slate-800/50 pt-1" : ""}`}>
+                                    <span className="w-1.5 h-1.5 bg-red-500 rounded-full shrink-0" />
+                                    <span className="font-bold text-white uppercase truncate text-[11px] sm:text-xs block max-w-[80px] xs:max-w-[120px] sm:max-w-none">{p.nama_pesilat}</span>
+                                    <span className="text-[9px] sm:text-[10px] text-slate-400 font-medium truncate shrink-0">({p.kontingen})</span>
+                                  </div>
                                 </div>
                               </div>
                             </td>
-                            <td className="p-3">
-                              <span className="text-slate-300 font-medium">{p.gender}</span>
-                              <div className="mt-1">
-                                <span className="bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 px-1.5 py-0.5 rounded font-mono text-[9px] uppercase font-bold">
-                                  {p.kategori}
-                                </span>
-                              </div>
+                            <td className="p-2 sm:p-3 min-w-0">
+                              <span className="text-slate-300 font-medium text-[11px] sm:text-xs block truncate leading-none">{p.gender}</span>
+                              <span className="inline-block bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 px-1 py-0.5 rounded font-mono text-[8px] sm:text-[9px] uppercase font-bold mt-1 leading-none">
+                                {p.kategori}
+                              </span>
                             </td>
-                            <td className="p-3 text-slate-300">
+                            <td className="p-2 sm:p-3 text-slate-300 text-[11px] sm:text-xs truncate max-w-[70px] sm:max-w-none">
                               {p.kelas}
                             </td>
-                            <td className="p-3 text-center">
-                              <span className="bg-slate-950 text-indigo-400 border border-slate-800 px-2.5 py-1 rounded font-mono font-bold text-xs shadow-inner">
+                            <td className="p-2 sm:p-3 text-center shrink-0">
+                              <span className="bg-slate-950 text-indigo-400 border border-slate-800 px-1.5 sm:px-2.5 py-0.5 sm:py-1 rounded font-mono font-bold text-[10px] sm:text-xs shadow-inner">
                                 G-{p.arena}
                               </span>
                             </td>
-                            <td className="p-3 text-right">
-                              <div className="flex justify-end items-center gap-1.5">
+                            <td className="p-2 sm:p-3 text-right">
+                              <div className="flex justify-end items-center gap-0.5 sm:gap-1.5">
                                 {p.is_done ? (
                                   <button
                                     onClick={() => handleToggleDone(p.id, true)}
-                                    className="px-2 py-1.5 bg-slate-950 hover:bg-indigo-600/20 text-indigo-400 border border-indigo-500/30 rounded-lg transition text-[9px] uppercase font-mono tracking-widest cursor-pointer flex items-center gap-1"
+                                    className="px-1 sm:px-2 py-0.5 sm:py-1 bg-slate-950 hover:bg-indigo-600/20 text-indigo-400 border border-indigo-500/30 rounded-lg transition text-[9px] uppercase font-mono tracking-widest cursor-pointer flex items-center gap-1 shrink-0"
                                     title="Kembalikan Partai ke Antrean"
                                   >
                                     <RefreshCw className="w-2.5 h-2.5" />
-                                    RESTORE
+                                    <span className="hidden sm:inline">RESTORE</span>
                                   </button>
                                 ) : (
                                   <>
                                     {p.is_playing ? (
-                                      <button
-                                        onClick={() => handleStopMatch(p.id)}
-                                        className="px-2 py-1.5 bg-red-600 hover:bg-red-700 text-white font-black rounded-lg transition text-[9px] uppercase font-mono tracking-widest flex items-center gap-1 cursor-pointer shadow-lg shadow-red-600/10 animate-pulse"
-                                        title="Hentikan Display Monitor"
-                                      >
-                                        ON AIR
-                                      </button>
+                                      <>
+                                        <button
+                                          onClick={() => announceMatch(p.arena, p)}
+                                          className="px-1 sm:px-2 py-0.5 sm:py-1 bg-amber-500 hover:bg-amber-600 text-neutral-950 font-black rounded-lg transition text-[9px] uppercase font-mono tracking-widest flex items-center gap-1 cursor-pointer shadow-lg shadow-amber-500/10 shrink-0"
+                                          title="Panggil Suara Pengumuman Atlit"
+                                        >
+                                          <Volume2 className="w-2.5 h-2.5" />
+                                          <span className="hidden sm:inline">PANGGIL</span>
+                                        </button>
+                                        <button
+                                          onClick={() => handleStopMatch(p.id)}
+                                          className="px-1 sm:px-2 py-0.5 sm:py-1 bg-red-600 hover:bg-red-700 text-white font-black rounded-lg transition text-[9px] uppercase font-mono tracking-widest flex items-center gap-1 cursor-pointer shadow-lg shadow-red-600/10 animate-pulse shrink-0"
+                                          title="Hentikan Display Monitor"
+                                        >
+                                          <Tv className="w-2.5 h-2.5" />
+                                          <span className="hidden sm:inline text-[8px] sm:text-[9px]">ON AIR</span>
+                                        </button>
+                                      </>
                                     ) : (
                                       <button
                                         onClick={() => handlePlayMatch(p.id)}
-                                        className="px-2 py-1.5 bg-slate-950 hover:bg-emerald-600/20 text-slate-400 hover:text-emerald-400 border border-slate-800 hover:border-emerald-500/30 rounded-lg transition text-[9px] uppercase font-mono tracking-widest cursor-pointer"
+                                        className="px-1 sm:px-2 py-0.5 sm:py-1 bg-slate-950 hover:bg-emerald-600/20 text-slate-400 hover:text-emerald-400 border border-slate-800 hover:border-emerald-500/30 rounded-lg transition text-[9px] uppercase font-mono tracking-widest cursor-pointer flex items-center gap-1 shrink-0"
                                         title="Tampilkan di Monitor"
                                       >
-                                        PLAY
+                                        <Play className="w-2.5 h-2.5" />
+                                        <span className="hidden sm:inline">PLAY</span>
                                       </button>
                                     )}
                                     <button
                                       onClick={() => handleToggleDone(p.id, false)}
-                                      className="p-1.5 bg-slate-950 hover:bg-emerald-600/20 text-slate-400 hover:text-emerald-400 border border-slate-800 hover:border-emerald-500/30 rounded-lg transition cursor-pointer"
+                                      className="p-1 sm:p-1.5 bg-slate-950 hover:bg-emerald-600/20 text-slate-400 hover:text-emerald-400 border border-slate-800 hover:border-emerald-500/30 rounded-lg transition cursor-pointer flex items-center justify-center shrink-0"
                                       title="Tandai Selesai"
                                     >
                                       <CheckCircle className="w-3 h-3" />
@@ -1354,14 +1648,14 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                                 )}
                                 <button
                                   onClick={() => handleEditClick(p)}
-                                  className="p-1.5 bg-slate-950 hover:bg-indigo-500/25 text-slate-400 hover:text-indigo-400 border border-slate-800 hover:border-indigo-500/30 rounded-lg transition cursor-pointer"
+                                  className="p-1 sm:p-1.5 bg-slate-950 hover:bg-indigo-500/25 text-slate-400 hover:text-indigo-400 border border-slate-800 hover:border-indigo-500/30 rounded-lg transition cursor-pointer flex items-center justify-center shrink-0"
                                   title="Edit Partai"
                                 >
                                   <Edit2 className="w-3 h-3" />
                                 </button>
                                 <button
                                   onClick={() => handleDeleteClick(p.id, p.nama_pesilat)}
-                                  className="p-1.5 bg-slate-950 hover:bg-rose-500/25 text-slate-400 hover:text-rose-400 border border-slate-800 hover:border-rose-500/30 rounded-lg transition cursor-pointer"
+                                  className="p-1 sm:p-1.5 bg-slate-950 hover:bg-rose-500/25 text-slate-400 hover:text-rose-400 border border-slate-800 hover:border-rose-500/30 rounded-lg transition cursor-pointer flex items-center justify-center shrink-0"
                                   title="Hapus Partai"
                                 >
                                   <Trash2 className="w-3 h-3" />
@@ -1469,6 +1763,38 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
           </div>
         )}
       </div>
+
+      {/* MODAL KONFIRMASI HAPUS */}
+      {showDeleteConfirm && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 max-w-sm w-full shadow-2xl">
+            <div className="flex items-center gap-3 text-red-500 mb-4">
+              <ShieldAlert className="w-8 h-8" />
+              <h3 className="font-display font-black text-lg text-white">Konfirmasi Penghapusan</h3>
+            </div>
+            <p className="text-sm text-slate-300 mb-6 leading-relaxed">
+              {showDeleteConfirm === 'all' 
+                ? "Apakah Anda yakin ingin menghapus SEMUA data pesilat/partai? Tindakan ini tidak dapat dibatalkan."
+                : `Apakah Anda yakin ingin menghapus ${selectedIds.length} data pesilat/partai yang terpilih? Tindakan ini tidak dapat dibatalkan.`
+              }
+            </p>
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={() => setShowDeleteConfirm(null)}
+                className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-sm font-semibold transition"
+              >
+                Batal
+              </button>
+              <button
+                onClick={showDeleteConfirm === 'all' ? executeDeleteAll : executeDeleteSelected}
+                className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-xl text-sm font-semibold transition"
+              >
+                Ya, Hapus Data
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

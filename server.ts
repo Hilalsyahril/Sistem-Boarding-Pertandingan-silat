@@ -887,6 +887,75 @@ app.delete("/api/pesilat/:id", async (req, res) => {
   }
 });
 
+// 5a. DELETE All Pesilat (Hapus Semua)
+app.delete("/api/pesilat", async (req, res) => {
+  try {
+    const client = getSupabaseClient();
+    if (client) {
+      const { error } = await client
+        .from("pesilat")
+        .delete()
+        .neq("id", "00000000-0000-0000-0000-000000000000");
+
+      if (error) {
+        handleSupabaseError(error, "menghapus semua pesilat");
+        localPesilatList.length = 0;
+        return res.json({ message: "Semua pesilat berhasil dihapus dari memori." });
+      }
+      localPesilatList.length = 0;
+      return res.json({ message: "Semua pesilat berhasil dihapus." });
+    } else {
+      localPesilatList.length = 0;
+      return res.json({ message: "Semua pesilat berhasil dihapus dari memori." });
+    }
+  } catch (error: any) {
+    console.error("Gagal menghapus semua pesilat:", error.message);
+    localPesilatList.length = 0;
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// 5b. POST Delete Batch Pesilat (Hapus Ceklist / Terpilih)
+app.post("/api/pesilat/delete-batch", async (req, res) => {
+  const { ids } = req.body;
+  if (!Array.isArray(ids)) {
+    return res.status(400).json({ error: "Data 'ids' harus berupa array." });
+  }
+
+  try {
+    const client = getSupabaseClient();
+    if (client) {
+      const { error } = await client
+        .from("pesilat")
+        .delete()
+        .in("id", ids);
+
+      if (error) {
+        handleSupabaseError(error, "menghapus batch pesilat");
+        ids.forEach(id => {
+          const index = localPesilatList.findIndex(p => p.id === id);
+          if (index !== -1) localPesilatList.splice(index, 1);
+        });
+        return res.json({ message: "Batch pesilat berhasil dihapus dari memori." });
+      }
+      ids.forEach(id => {
+        const index = localPesilatList.findIndex(p => p.id === id);
+        if (index !== -1) localPesilatList.splice(index, 1);
+      });
+      return res.json({ message: "Batch pesilat berhasil dihapus." });
+    } else {
+      ids.forEach(id => {
+        const index = localPesilatList.findIndex(p => p.id === id);
+        if (index !== -1) localPesilatList.splice(index, 1);
+      });
+      return res.json({ message: "Batch pesilat berhasil dihapus dari memori." });
+    }
+  } catch (error: any) {
+    console.error("Gagal menghapus batch pesilat:", error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // 6. GET Pengaturan Arena
 app.get("/api/pengaturan_arena", async (req, res) => {
   try {
