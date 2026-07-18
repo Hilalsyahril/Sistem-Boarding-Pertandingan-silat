@@ -14,7 +14,7 @@ export default function PublicDisplay() {
   const [isAudioEnabled, setIsAudioEnabled] = useState<boolean>(true);
   const [hasInteracted, setHasInteracted] = useState<boolean>(false);
   const announcedIdsRef = useRef<Record<number, string>>({});
-  const processingTimeoutRef = useRef<string | null>(null);
+  const processedTimeoutsRef = useRef<Set<string>>(new Set());
   const activeUtterancesRef = useRef<any[]>([]);
   const speechQueueRef = useRef<{ text: string; arenaNum: number; pesilatId: string }[]>([]);
   const isSpeakingRef = useRef<boolean>(false);
@@ -183,6 +183,8 @@ export default function PublicDisplay() {
     return 3;
   };
 
+
+
   const handleTimeoutMatch = async (id: string) => {
     try {
       const res = await fetch(`/api/pesilat/${id}/timeout`, { method: "PUT" });
@@ -195,12 +197,23 @@ export default function PublicDisplay() {
       }
     } catch (err) {
       console.error("Gagal memproses timeout otomatis di display:", err);
-    } finally {
-      if (processingTimeoutRef.current === id) {
-        processingTimeoutRef.current = null;
-      }
     }
   };
+
+  // Monitor timer yang habis untuk pemicu otomatis partai berikutnya
+  useEffect(() => {
+    pesilatList.forEach(p => {
+      if (p.is_playing && p.timer_seconds_left === 0) {
+        if (!processedTimeoutsRef.current.has(p.id)) {
+          processedTimeoutsRef.current.add(p.id);
+          console.log(`Partai ${p.nomor_partai} selesai. Mengaktifkan partai berikutnya...`);
+          handleTimeoutMatch(p.id);
+        }
+      } else if (p.timer_seconds_left > 0) {
+        processedTimeoutsRef.current.delete(p.id);
+      }
+    });
+  }, [pesilatList]);
 
   // Local real-time timer countdown loop (smooth countdown syncing)
   useEffect(() => {
@@ -212,19 +225,12 @@ export default function PublicDisplay() {
             changed = true;
             const newSeconds = p.timer_seconds_left - 1;
             
-            // Jika waktu tanding habis, langsung ubah status secara optimistik ke selesai/standby
+            // Jika waktu tanding habis, berhenti menghitung
             if (newSeconds === 0) {
-              if (processingTimeoutRef.current !== p.id) {
-                processingTimeoutRef.current = p.id;
-                console.log(`Partai ${p.nomor_partai} selesai dari loop utama. Mengaktifkan partai berikutnya...`);
-                handleTimeoutMatch(p.id);
-              }
               return {
                 ...p,
                 timer_seconds_left: 0,
-                timer_running: false,
-                is_playing: false, // langsung sembunyikan untuk mengembalikan gelanggang ke standby / menunggu
-                is_done: true
+                timer_running: false
               };
             }
 
@@ -711,9 +717,9 @@ export default function PublicDisplay() {
               // Temukan atlet yang sedang 'is_playing' di arena ini
               const playingPesilat = pesilatInArena.find(p => p.is_playing);
 
-              // Atlet lain di arena ini yang tidak is_playing dianggap daftar tunggu (antrean)
+              // Atlet lain di arena ini yang tidak is_playing dan belum selesai dianggap daftar tunggu (antrean)
               const waitingQueue = pesilatInArena
-                .filter(p => !p.is_playing)
+                .filter(p => !p.is_playing && !p.is_done && p.timer_seconds_left > 0)
                 .sort((a, b) => {
                   const numA = parseFloat(a.nomor_partai);
                   const numB = parseFloat(b.nomor_partai);

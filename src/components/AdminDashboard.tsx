@@ -70,9 +70,10 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
 
   const [isEditMode, setIsEditMode] = useState<boolean>(false);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  const processingTimeoutRef = useRef<string | null>(null);
+  const processedTimeoutsRef = useRef<Set<string>>(new Set());
   const [isAudioEnabled, setIsAudioEnabled] = useState<boolean>(true);
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState<'all' | 'selected' | null>(null);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState<'all' | 'selected' | 'single' | null>(null);
+  const [singleDeleteTarget, setSingleDeleteTarget] = useState<{ id: string, nama: string } | null>(null);
 
   const handleToggleSelect = (id: string) => {
     setSelectedIds(prev => {
@@ -374,7 +375,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
     return () => clearInterval(timer);
   }, []);
 
-  // Handler jika timer habis, otomatis putar partai selanjutnya yang ada di waiting list
+  // Handler jika timer habis, akan dipanggil otomatis
   const handleTimeoutMatch = async (id: string) => {
     try {
       const res = await fetch(`/api/pesilat/${id}/timeout`, { method: "PUT" });
@@ -382,12 +383,8 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
         await fetchInitialData(3, 1500, true);
       }
     } catch (err) {
-      console.error("Gagal memproses timeout otomatis:", err);
+      console.error("Gagal memproses timeout:", err);
       await fetchInitialData(3, 1500, true);
-    } finally {
-      if (processingTimeoutRef.current === id) {
-        processingTimeoutRef.current = null;
-      }
     }
   };
 
@@ -395,11 +392,13 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
   useEffect(() => {
     pesilatList.forEach(p => {
       if (p.is_playing && p.timer_seconds_left === 0) {
-        if (processingTimeoutRef.current !== p.id) {
-          processingTimeoutRef.current = p.id;
+        if (!processedTimeoutsRef.current.has(p.id)) {
+          processedTimeoutsRef.current.add(p.id);
           console.log(`Partai ${p.nomor_partai} selesai. Mengaktifkan partai berikutnya...`);
           handleTimeoutMatch(p.id);
         }
+      } else if (p.timer_seconds_left > 0) {
+        processedTimeoutsRef.current.delete(p.id);
       }
     });
   }, [pesilatList]);
@@ -807,13 +806,20 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
   };
 
   // 4. Delete Handler
-  const handleDeleteClick = async (id: string, nama: string) => {
-    if (!confirm(`Apakah Anda yakin ingin menghapus pesilat "${nama}"?`)) {
-      return;
-    }
+  const handleDeleteClick = (id: string, nama: string) => {
+    setSingleDeleteTarget({ id, nama });
+    setShowDeleteConfirm('single');
+  };
 
+  const executeDeleteSingle = async () => {
+    if (!singleDeleteTarget) return;
+    const { id, nama } = singleDeleteTarget;
+    
     setError(null);
     setSuccess(null);
+    setLoading(true);
+    setShowDeleteConfirm(null);
+    setSingleDeleteTarget(null);
 
     try {
       const res = await fetch(`/api/pesilat/${id}`, {
@@ -828,6 +834,8 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
       fetchInitialData(3, 1500, true);
     } catch (err: any) {
       setError(err.message);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -1484,13 +1492,13 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                   </div>
 
                   <div className="flex items-center gap-2">
-                    {selectedIds.size > 0 && (
+                    {selectedIds.length > 0 && (
                       <button
                         onClick={handleDeleteSelected}
                         className="px-3 py-1.5 bg-red-950/40 hover:bg-red-950/80 border border-red-500/30 hover:border-red-500 text-red-200 transition text-xs font-black flex items-center gap-1.5 rounded-xl cursor-pointer shadow-lg"
                       >
                         <Trash2 className="w-3.5 h-3.5 text-red-400" />
-                        <span>Hapus Ceklist ({selectedIds.size})</span>
+                        <span>Hapus Ceklist ({selectedIds.length})</span>
                       </button>
                     )}
                     <button
@@ -1775,7 +1783,9 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
             <p className="text-sm text-slate-300 mb-6 leading-relaxed">
               {showDeleteConfirm === 'all' 
                 ? "Apakah Anda yakin ingin menghapus SEMUA data pesilat/partai? Tindakan ini tidak dapat dibatalkan."
-                : `Apakah Anda yakin ingin menghapus ${selectedIds.length} data pesilat/partai yang terpilih? Tindakan ini tidak dapat dibatalkan.`
+                : showDeleteConfirm === 'selected'
+                ? `Apakah Anda yakin ingin menghapus ${selectedIds.length} data pesilat/partai yang terpilih? Tindakan ini tidak dapat dibatalkan.`
+                : `Apakah Anda yakin ingin menghapus pesilat "${singleDeleteTarget?.nama}"? Tindakan ini tidak dapat dibatalkan.`
               }
             </p>
             <div className="flex gap-3 justify-end">
@@ -1786,7 +1796,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                 Batal
               </button>
               <button
-                onClick={showDeleteConfirm === 'all' ? executeDeleteAll : executeDeleteSelected}
+                onClick={showDeleteConfirm === 'all' ? executeDeleteAll : showDeleteConfirm === 'selected' ? executeDeleteSelected : executeDeleteSingle}
                 className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-xl text-sm font-semibold transition"
               >
                 Ya, Hapus Data

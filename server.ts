@@ -565,8 +565,8 @@ app.put("/api/pesilat/:id/play", async (req, res) => {
         }
       }
 
-      // Matikan status playing pesilat lain di arena yang sama (jika ada sisa)
-      await client.from("pesilat").update({ is_playing: false, timer_running: false }).eq("arena", arenaNum);
+      // Matikan status playing pesilat lain di arena yang sama (jika ada sisa) dan tandai sebagai selesai
+      await client.from("pesilat").update({ is_playing: false, timer_running: false, is_done: true }).eq("arena", arenaNum).eq("is_playing", true);
 
       // Aktifkan pesilat baru
       const { data, error } = await updatePesilatSafely(client, id, { is_playing: true, timer_running: true, timer_last_updated_at: Date.now(), is_done: false });
@@ -756,8 +756,8 @@ app.put("/api/pesilat/:id/timeout", async (req, res) => {
 
     const arenaNum = currentPesilat.arena;
 
-    // Cari daftar tunggu untuk arena ini (pesilat lain yang is_playing false)
-    const waitingList = allPesilats.filter(p => p.arena === arenaNum && p.id !== id && !p.is_playing);
+    // Cari daftar tunggu untuk arena ini (pesilat lain yang is_playing false, belum selesai, dan waktu masih ada)
+    const waitingList = allPesilats.filter(p => p.arena === arenaNum && p.id !== id && !p.is_playing && p.timer_seconds_left > 0 && !p.is_done);
 
     // Urutkan daftar tunggu secara cerdas berdasarkan nomor_partai
     waitingList.sort((a, b) => {
@@ -790,8 +790,14 @@ app.put("/api/pesilat/:id/timeout", async (req, res) => {
       }
 
       if (nextPesilat) {
-        // Aktifkan pesilat berikutnya
-        const { data, error } = await updatePesilatSafely(client, nextPesilat.id, { is_playing: true, timer_running: true, timer_last_updated_at: Date.now(), is_done: false });
+        // Aktifkan pesilat berikutnya dan reset waktu
+        const { data, error } = await updatePesilatSafely(client, nextPesilat.id, { 
+          is_playing: true, 
+          timer_running: true, 
+          timer_last_updated_at: Date.now(), 
+          is_done: false,
+          timer_seconds_left: nextPesilat.timer_duration || 180
+        });
 
         // Sinkronisasi lokal memori
         localPesilatList.forEach(p => {
@@ -806,6 +812,7 @@ app.put("/api/pesilat/:id/timeout", async (req, res) => {
           localPesilatList[nextIdx].timer_running = true;
           localPesilatList[nextIdx].timer_last_updated_at = Date.now();
           localPesilatList[nextIdx].is_done = false;
+          localPesilatList[nextIdx].timer_seconds_left = nextPesilat.timer_duration || 180;
         }
 
         return res.json({ message: "Timeout diproses. Partai lama dipindahkan ke daftar selesai. Partai berikutnya mulai tampil.", nextPesilat: data ? (Array.isArray(data) ? data[0] : data) : nextPesilat });
