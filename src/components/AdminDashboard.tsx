@@ -172,7 +172,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
         body: JSON.stringify({ text, arenaNum, pesilatId: p.id })
       });
     } catch (err) {
-      console.error("Gagal mengirim pengumuman", err);
+      if (err.message !== "Failed to fetch") console.error("Gagal mengirim pengumuman", err);
     }
   };
 
@@ -309,7 +309,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
         await fetchInitialData(3, 1500, true);
       }
     } catch (err) {
-      console.error("Gagal memproses timeout:", err);
+      if (err.message !== "Failed to fetch") console.error("Gagal memproses timeout:", err);
       await fetchInitialData(3, 1500, true);
     }
   };
@@ -1268,15 +1268,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                                   <Volume2 className="w-3.5 h-3.5" />
                                   <span className="hidden sm:inline">PANGGIL</span>
                                 </button>
-                                {/* Next Match / Selesai */}
-                                <button
-                                  onClick={() => handleTimeoutMatch(activePesilat.id)}
-                                  className="p-1.5 bg-indigo-600/20 hover:bg-indigo-600/35 text-indigo-400 border border-indigo-600/30 rounded-lg transition cursor-pointer text-[10px] font-black font-mono tracking-widest uppercase px-2.5 py-1 flex items-center gap-1"
-                                  title="Selesaikan & Pindah ke Partai Berikutnya"
-                                >
-                                  <SkipForward className="w-3.5 h-3.5" />
-                                  <span>NEXT</span>
-                                </button>
+
                                 {/* Stop Display */}
                                 <button
                                   onClick={() => handleStopMatch(activePesilat.id)}
@@ -1299,10 +1291,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                                   type="number"
                                   placeholder="Detik"
                                   defaultValue={activePesilat.timer_duration}
-                                  onBlur={(e) => {
-                                    const secs = parseInt(e.target.value) || 120;
-                                    handleUpdateTimer(activePesilat.id, secs, secs, false);
-                                  }}
+
                                   onKeyDown={(e) => {
                                     if (e.key === 'Enter') {
                                       const target = e.currentTarget;

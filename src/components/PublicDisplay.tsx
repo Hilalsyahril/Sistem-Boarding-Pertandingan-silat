@@ -211,7 +211,7 @@ export default function PublicDisplay() {
         }
       }
     } catch (err) {
-      console.error("Gagal memproses timeout otomatis di display:", err);
+      if (err.message !== "Failed to fetch") console.error("Gagal memproses timeout otomatis di display:", err);
     }
   };
 
@@ -249,7 +249,7 @@ export default function PublicDisplay() {
           }
         }
       } catch (err) {
-        console.error("Gagal memuat pengumuman:", err);
+        if (err.message !== "Failed to fetch") console.error("Gagal memuat pengumuman:", err);
       }
     }, 2000);
     return () => clearInterval(interval);
@@ -402,7 +402,7 @@ export default function PublicDisplay() {
         }
         setLastUpdated(new Date());
       } catch (err) {
-        console.error("Gagal memperbarui pesilat secara real-time:", err);
+        if (err.message !== "Failed to fetch") console.error("Gagal memperbarui pesilat secara real-time:", err);
       }
     }
 

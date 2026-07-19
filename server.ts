@@ -9,7 +9,7 @@ dotenv.config();
 
 const app = express();
 app.use(express.json());
-const PORT = process.env.PORT || 3000;
+const PORT = 3000;
 
 const DB_URL = process.env.DATABASE_URL;
 if (!DB_URL) {
@@ -288,7 +288,7 @@ app.put("/api/pesilat/:id/timeout", async (req, res) => {
     const currentIndex = arenaMatches.findIndex(match => match.id === id);
     if (currentIndex !== -1 && currentIndex + 1 < arenaMatches.length) {
       const nextMatch = arenaMatches[currentIndex + 1];
-      await updatePesilat(nextMatch.id, { is_playing: true, timer_running: false, is_done: false });
+      await updatePesilat(nextMatch.id, { is_playing: true, timer_running: false, is_done: false, timer_seconds_left: nextMatch.timer_seconds_left || nextMatch.timer_duration || 180 });
     }
 
     res.json(await getPesilatById(id));
@@ -336,18 +336,13 @@ app.post("/api/tts", async (req, res) => {
     const { text } = req.body;
     if (!text) return res.status(400).json({ error: "Text is required" });
 
-    const ttsRes = await fetch("https://tiktok-tts.weilnet.workers.dev/api/generation", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text, voice: "id_001" })
-    });
+    const url = `https://translate.google.com/translate_tts?ie=UTF-8&q=${encodeURIComponent(text)}&tl=id&client=tw-ob`;
+    const ttsRes = await fetch(url);
+    if (!ttsRes.ok) throw new Error("Google TTS failed");
     
-    const json = await ttsRes.json();
-    if (json.success && json.data) {
-      res.json({ audio: json.data });
-    } else {
-      throw new Error(json.error || "Failed to generate audio");
-    }
+    const arrayBuffer = await ttsRes.arrayBuffer();
+    const base64 = Buffer.from(arrayBuffer).toString('base64');
+    res.json({ audio: base64 });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }
