@@ -238,11 +238,12 @@ app.put("/api/pesilat/:id/play", async (req, res) => {
     const p = await getPesilatById(id);
     if (!p) return res.status(404).json({ error: "Not found" });
     
-    const all = await getPesilats();
-    for (const other of all) {
-      if (other.arena === p.arena && other.id !== id && other.is_playing) {
-        await updatePesilat(other.id, { is_playing: false, timer_running: false, is_done: true });
-      }
+    // Atomically set all other matches in this arena to not playing
+    if (pgPool) {
+      await pgPool.query(
+        "UPDATE pesilat SET is_playing = false, timer_running = false, is_done = true WHERE arena = $1 AND id != $2 AND is_playing = true",
+        [p.arena, id]
+      );
     }
     
     await updatePesilat(id, { 
@@ -278,17 +279,26 @@ app.put("/api/pesilat/:id/timer", async (req, res) => {
 app.put("/api/pesilat/:id/timeout", async (req, res) => {
   try {
     const id = req.params.id;
-    const p = await getPesilatById(id);
-    if (!p) return res.status(404).json({ error: "Not found" });
+    
+    if (!pgPool) return res.status(500).json({ error: "Database not connected" });
+    
+    // Atomic check-and-set to prevent race conditions from multiple clients triggering timeout concurrently
+    const updateRes = await pgPool.query(
+      "UPDATE pesilat SET is_playing = false, timer_running = false, is_done = true, timer_seconds_left = 0 WHERE id = $1 AND is_playing = true RETURNING *",
+      [id]
+    );
 
-    if (!p.is_playing) {
-      return res.json(p);
+    if (updateRes.rowCount === 0) {
+      // Already processed or not playing
+      const currentP = await getPesilatById(id);
+      if (!currentP) return res.status(404).json({ error: "Not found" });
+      return res.json(currentP);
     }
 
-    await updatePesilat(id, { is_playing: false, timer_running: false, is_done: true, timer_seconds_left: 0 });
+    const p = mapPesilat(updateRes.rows[0]);
 
     const all = await getPesilats();
-    const arenaMatches = all.filter(match => match.arena === p.arena);
+    const arenaMatches = all.filter(match => Number(match.arena) === Number(p.arena));
     const currentIndex = arenaMatches.findIndex(match => match.id === id);
     if (currentIndex !== -1) {
       // Find the first match in the same arena after the current one that is not done and not playing

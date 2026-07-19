@@ -220,6 +220,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
   const fetchConfig = async (retriesLeft = 3, delayMs = 1500) => {
     try {
       const res = await fetch(`/api/config-status?_t=${Date.now()}`);
+      if (!res.ok) throw new Error("Server error");
       const data = await res.json();
       setConfig(data);
     } catch (err) {
@@ -350,7 +351,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
         const matchingItem = prev.find(item => item.id === id);
         const arenaNum = matchingItem ? matchingItem.arena : 1;
         return prev.map(p => {
-          if (p.arena === arenaNum) {
+          if (Number(p.arena) === Number(arenaNum)) {
             if (p.id === id) {
               return { ...p, is_playing: true, timer_running: true, is_done: false };
             } else if (p.is_playing) {
@@ -497,7 +498,10 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
           body: JSON.stringify({ items: mappedItems })
         });
 
-        const resData = await res.json();
+        let resData = {};
+        try {
+          resData = await res.json();
+        } catch (e) {}
         if (!res.ok) {
           throw new Error(resData.error || "Gagal menyimpan data import ke server.");
         }
@@ -700,7 +704,10 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
         });
       }
 
-      const responseData = await res.json();
+      let responseData = {};
+      try {
+        responseData = await res.json();
+      } catch (e) {}
 
       if (!res.ok) {
         throw new Error(responseData.error || "Gagal menyimpan data pesilat.");
@@ -785,7 +792,10 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
         body: JSON.stringify({ jumlah_arena: inputJumlahArena })
       });
 
-      const data = await res.json();
+      let data = {};
+      try {
+        data = await res.json();
+      } catch (e) {}
 
       if (!res.ok) {
         throw new Error(data.error || "Gagal memperbarui jumlah arena.");

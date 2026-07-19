@@ -44,16 +44,52 @@ export default function PublicDisplay() {
     }
   };
 
+  const fetchTTS = async (item: any) => {
+    if (item.audioData || item.fetching || item.failed) return;
+    item.fetching = true;
+    try {
+      const controller = new AbortController();
+      const fetchTimeout = setTimeout(() => controller.abort(), 15000);
+      const res = await fetch("/api/tts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: item.text }),
+        signal: controller.signal
+      });
+      clearTimeout(fetchTimeout);
+      if (!res.ok) throw new Error("TTS Backend failed");
+      const data = await res.json();
+      if (data.audio) {
+        item.audioData = data.audio;
+      } else {
+        throw new Error("No audio returned");
+      }
+    } catch(e) {
+      console.warn("TTS fetch failed, falling back to native browser TTS", e);
+      item.useNativeFallback = true;
+    }
+    processQueue();
+  };
+
   const processQueue = async () => {
     if (!isAudioEnabled) {
       speechQueueRef.current = [];
       isSpeakingRef.current = false;
       return;
     }
-    if (isSpeakingRef.current) return;
     if (speechQueueRef.current.length === 0) return;
+    
+    // Trigger background fetch for all items in queue
+    speechQueueRef.current.forEach(i => fetchTTS(i));
 
     const current = speechQueueRef.current[0];
+    
+    // Wait for the current item to finish fetching
+    if (!current.audioData && !current.failed && !current.useNativeFallback) {
+      return;
+    }
+
+    if (isSpeakingRef.current) return;
     isSpeakingRef.current = true;
 
     let isDone = false;
@@ -71,18 +107,32 @@ export default function PublicDisplay() {
     };
 
     try {
-      const controller = new AbortController();
-      const fetchTimeout = setTimeout(() => controller.abort(), 5000);
-      const res = await fetch("/api/tts", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: current.text }),
-        signal: controller.signal
-      });
-      clearTimeout(fetchTimeout);
-      if (!res.ok) throw new Error("TTS Backend failed");
-      const data = await res.json();
-      if (!data.audio) throw new Error("No audio returned");
+      if (current.useNativeFallback) {
+        if ('speechSynthesis' in window) {
+          const utterance = new SpeechSynthesisUtterance(current.text);
+          utterance.lang = 'id-ID';
+          
+          // Try to find Indonesian voice
+          const voices = window.speechSynthesis.getVoices();
+          const idVoice = voices.find(v => v.lang.includes('id') || v.lang.includes('ID'));
+          if (idVoice) utterance.voice = idVoice;
+
+          utterance.onend = () => finishUtterance();
+          utterance.onerror = (e) => {
+            console.warn("Native TTS error", e);
+            finishUtterance();
+          };
+          window.speechSynthesis.speak(utterance);
+          
+          // Safety timeout
+          safetyTimeout = setTimeout(() => finishUtterance(), 15000);
+          return;
+        } else {
+          throw new Error("Native Web Speech API not supported");
+        }
+      }
+
+      if (current.failed || !current.audioData) throw new Error("Audio data not available");
 
       if (!globalAudioCtx) {
         const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
@@ -93,7 +143,7 @@ export default function PublicDisplay() {
       }
       const audioCtx = globalAudioCtx;
       
-      const binaryString = atob(data.audio);
+      const binaryString = atob(current.audioData);
       const bytes = new Uint8Array(binaryString.length);
       for (let i = 0; i < binaryString.length; i++) {
         bytes[i] = binaryString.charCodeAt(i);
@@ -104,13 +154,13 @@ export default function PublicDisplay() {
       
       const source = audioCtx.createBufferSource();
       source.buffer = audioBuffer;
-      source.playbackRate.value = 1.15; // Sedikit dipercepat tempo nya
+      // Normal tempo
       source.connect(audioCtx.destination);
       source.onended = () => {
         finishUtterance();
       };
       
-      const durationMs = ((audioBuffer.length / audioBuffer.sampleRate) * 1000) / 1.15;
+      const durationMs = (audioBuffer.length / audioBuffer.sampleRate) * 1000;
       safetyTimeout = setTimeout(() => finishUtterance(), durationMs + 5000); // 5000ms generous padding
 
       source.start();
@@ -206,7 +256,14 @@ export default function PublicDisplay() {
       if (!isAudioEnabled) return;
       try {
         const res = await fetch(`/api/announce?_t=${Date.now()}`);
-        const data = await res.json();
+        if (!res.ok) throw new Error("Server Error " + res.status);
+        const textData = await res.text();
+        let data;
+        try {
+          data = JSON.parse(textData);
+        } catch (e) {
+          throw new Error("Invalid JSON response");
+        }
         if (Array.isArray(data) && data.length > 0) {
           for (const ann of data) {
             // check if already queued to avoid double
@@ -356,7 +413,14 @@ export default function PublicDisplay() {
     async function fetchLatestPesilat() {
       try {
         const res = await fetch(`/api/pesilat?_t=${Date.now()}`);
-        const data = await res.json();
+        if (!res.ok) throw new Error("Server Error");
+        const textData = await res.text();
+        let data;
+        try {
+          data = JSON.parse(textData);
+        } catch (e) {
+          throw new Error("Invalid JSON response");
+        }
         if (Array.isArray(data)) {
           setPesilatList(prev => {
             return data.map((newP: Pesilat) => {
