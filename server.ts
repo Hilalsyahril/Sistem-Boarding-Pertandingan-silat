@@ -103,7 +103,7 @@ async function setJumlahArena(val: number) {
 
 async function getPesilats() {
   if (!pgPool) return [];
-  const res = await pgPool.query("SELECT * FROM pesilat ORDER BY arena, id");
+  const res = await pgPool.query("SELECT * FROM pesilat ORDER BY arena, CAST(NULLIF(regexp_replace(nomor_partai, '[^0-9]', '', 'g'), '') AS INTEGER)");
   return res.rows.map(mapPesilat);
 }
 
@@ -277,8 +277,21 @@ app.put("/api/pesilat/:id/timer", async (req, res) => {
 
 app.put("/api/pesilat/:id/timeout", async (req, res) => {
   try {
-    await updatePesilat(req.params.id, { timer_running: false });
-    res.json(await getPesilatById(req.params.id));
+    const id = req.params.id;
+    const p = await getPesilatById(id);
+    if (!p) return res.status(404).json({ error: "Not found" });
+
+    await updatePesilat(id, { is_playing: false, timer_running: false, is_done: true, timer_seconds_left: 0 });
+
+    const all = await getPesilats();
+    const arenaMatches = all.filter(match => match.arena === p.arena);
+    const currentIndex = arenaMatches.findIndex(match => match.id === id);
+    if (currentIndex !== -1 && currentIndex + 1 < arenaMatches.length) {
+      const nextMatch = arenaMatches[currentIndex + 1];
+      await updatePesilat(nextMatch.id, { is_playing: true, timer_running: false, is_done: false });
+    }
+
+    res.json(await getPesilatById(id));
   } catch (error: any) { res.status(500).json({ error: error.message }); }
 });
 

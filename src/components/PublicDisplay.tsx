@@ -71,11 +71,15 @@ export default function PublicDisplay() {
     };
 
     try {
+      const controller = new AbortController();
+      const fetchTimeout = setTimeout(() => controller.abort(), 5000);
       const res = await fetch("/api/tts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: current.text })
+        body: JSON.stringify({ text: current.text }),
+        signal: controller.signal
       });
+      clearTimeout(fetchTimeout);
       if (!res.ok) throw new Error("TTS Backend failed");
       const data = await res.json();
       if (!data.audio) throw new Error("No audio returned");
@@ -237,8 +241,8 @@ export default function PublicDisplay() {
         if (Array.isArray(data) && data.length > 0) {
           for (const ann of data) {
             // check if already queued to avoid double
-            if (!speechQueueRef.current.some(item => item.pesilatId === ann.pesilatId)) {
-              speechQueueRef.current.push({ text: ann.text, arenaNum: ann.arenaNum, pesilatId: ann.pesilatId });
+            if (!speechQueueRef.current.some(item => item.annId === ann.id)) {
+              speechQueueRef.current.push({ text: ann.text, arenaNum: ann.arenaNum, pesilatId: ann.pesilatId, annId: ann.id });
               processQueue();
             }
             await fetch(`/api/announce/${ann.id}`, { method: "DELETE" });

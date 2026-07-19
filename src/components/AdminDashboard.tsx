@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { 
   Users, Settings, LogOut, Plus, Trash2, Edit2, ShieldAlert, CheckCircle, 
   UserPlus, RefreshCw, Layers, Award, UsersRound, HelpCircle, LayoutGrid,
-  Play, Pause, RotateCcw, Tv, Clock, Timer, FileSpreadsheet, Upload, Download, Volume2
+  Play, Pause, RotateCcw, Tv, Clock, Timer, FileSpreadsheet, Upload, Download, Volume2, SkipForward
 } from "lucide-react";
 import * as XLSX from "xlsx";
 import { Pesilat, ConfigStatus } from "../types";
@@ -1267,6 +1267,15 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                                 >
                                   <Volume2 className="w-3.5 h-3.5" />
                                   <span className="hidden sm:inline">PANGGIL</span>
+                                </button>
+                                {/* Next Match / Selesai */}
+                                <button
+                                  onClick={() => handleTimeoutMatch(activePesilat.id)}
+                                  className="p-1.5 bg-indigo-600/20 hover:bg-indigo-600/35 text-indigo-400 border border-indigo-600/30 rounded-lg transition cursor-pointer text-[10px] font-black font-mono tracking-widest uppercase px-2.5 py-1 flex items-center gap-1"
+                                  title="Selesaikan & Pindah ke Partai Berikutnya"
+                                >
+                                  <SkipForward className="w-3.5 h-3.5" />
+                                  <span>NEXT</span>
                                 </button>
                                 {/* Stop Display */}
                                 <button
