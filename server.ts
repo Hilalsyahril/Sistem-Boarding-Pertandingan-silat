@@ -288,7 +288,7 @@ app.put("/api/pesilat/:id/timeout", async (req, res) => {
     const currentIndex = arenaMatches.findIndex(match => match.id === id);
     if (currentIndex !== -1 && currentIndex + 1 < arenaMatches.length) {
       const nextMatch = arenaMatches[currentIndex + 1];
-      await updatePesilat(nextMatch.id, { is_playing: true, timer_running: false, is_done: false, timer_seconds_left: nextMatch.timer_seconds_left || nextMatch.timer_duration || 180 });
+      await updatePesilat(nextMatch.id, { is_playing: true, timer_running: true, is_done: false, timer_seconds_left: nextMatch.timer_seconds_left || nextMatch.timer_duration || 180 });
     }
 
     res.json(await getPesilatById(id));
@@ -336,12 +336,33 @@ app.post("/api/tts", async (req, res) => {
     const { text } = req.body;
     if (!text) return res.status(400).json({ error: "Text is required" });
 
-    const url = `https://translate.google.com/translate_tts?ie=UTF-8&q=${encodeURIComponent(text)}&tl=id&client=tw-ob`;
-    const ttsRes = await fetch(url);
-    if (!ttsRes.ok) throw new Error("Google TTS failed");
+    // Split text into chunks of ~150 chars to avoid Google TTS limit (200)
+    const words = text.split(' ');
+    const chunks = [];
+    let currentChunk = '';
     
-    const arrayBuffer = await ttsRes.arrayBuffer();
-    const base64 = Buffer.from(arrayBuffer).toString('base64');
+    for (const word of words) {
+      if ((currentChunk + word).length > 150) {
+        chunks.push(currentChunk.trim());
+        currentChunk = word + ' ';
+      } else {
+        currentChunk += word + ' ';
+      }
+    }
+    if (currentChunk.trim().length > 0) chunks.push(currentChunk.trim());
+
+    const audioBuffers = [];
+    for (const chunk of chunks) {
+      const url = `https://translate.google.com/translate_tts?ie=UTF-8&q=${encodeURIComponent(chunk)}&tl=id&client=tw-ob`;
+      const ttsRes = await fetch(url);
+      if (!ttsRes.ok) throw new Error("Google TTS failed for chunk: " + chunk);
+      const arrayBuffer = await ttsRes.arrayBuffer();
+      audioBuffers.push(Buffer.from(arrayBuffer));
+    }
+    
+    // Simple MP3 concatenation by joining buffers (works for basic playback in AudioContext)
+    const combinedBuffer = Buffer.concat(audioBuffers);
+    const base64 = combinedBuffer.toString('base64');
     res.json({ audio: base64 });
   } catch (error: any) {
     res.status(500).json({ error: error.message });

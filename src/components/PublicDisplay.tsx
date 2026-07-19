@@ -104,13 +104,14 @@ export default function PublicDisplay() {
       
       const source = audioCtx.createBufferSource();
       source.buffer = audioBuffer;
+      source.playbackRate.value = 1.15; // Sedikit dipercepat tempo nya
       source.connect(audioCtx.destination);
       source.onended = () => {
         finishUtterance();
       };
       
-      const durationMs = (audioBuffer.length / audioBuffer.sampleRate) * 1000;
-      safetyTimeout = setTimeout(() => finishUtterance(), durationMs + 500);
+      const durationMs = ((audioBuffer.length / audioBuffer.sampleRate) * 1000) / 1.15;
+      safetyTimeout = setTimeout(() => finishUtterance(), durationMs + 5000); // 5000ms generous padding
 
       source.start();
 
@@ -134,17 +135,25 @@ export default function PublicDisplay() {
       utterance.pitch = 0.95;
 
       const charCount = current.text.length;
-      const estimatedDurationMs = Math.max(2000, (charCount * 80) + 500);
+      const estimatedDurationMs = Math.max(5000, (charCount * 150) + 2000);
       safetyTimeout = setTimeout(() => {
         finishUtterance();
       }, estimatedDurationMs);
 
-      utterance.onend = finishUtterance;
-      utterance.onerror = finishUtterance;
+      utterance.onend = () => {
+        activeUtterancesRef.current = activeUtterancesRef.current.filter(u => u !== utterance);
+        finishUtterance();
+      };
+      utterance.onerror = () => {
+        activeUtterancesRef.current = activeUtterancesRef.current.filter(u => u !== utterance);
+        finishUtterance();
+      };
       
       try {
+        activeUtterancesRef.current.push(utterance);
         window.speechSynthesis.speak(utterance);
       } catch (e) {
+        activeUtterancesRef.current = activeUtterancesRef.current.filter(u => u !== utterance);
         finishUtterance();
       }
     }
@@ -170,11 +179,13 @@ export default function PublicDisplay() {
     const cleanNamaBiru = p.nama_pesilat_biru ? p.nama_pesilat_biru.trim() : "";
     const cleanKontingenBiru = p.kontingen_biru ? p.kontingen_biru.trim() : "";
 
+    const prefixKelas = cleanKelas.toLowerCase().includes("kelas") || cleanKelas === "" ? cleanKelas : `kelas ${cleanKelas}`;
+    
     let text = "";
     if (cleanNamaBiru !== "") {
-      text = `Panggilan kepada partai nomor ${p.nomor_partai || ""}, di Gelanggang ${arenaNum}. Kategori ${cleanKategori}, ${cleanGender}, ${cleanKelas}. Di sudut biru, ${cleanNamaBiru} dari ${cleanKontingenBiru}, melawan di sudut merah, ${cleanNamaMerah} dari ${cleanKontingenMerah}. Selamat bertanding.`;
+      text = `Partai ${p.nomor_partai || ""}, Gelanggang ${arenaNum}. ${cleanKategori} ${cleanGender} ${prefixKelas}. Sudut biru ${cleanNamaBiru} dari ${cleanKontingenBiru}, melawan sudut merah ${cleanNamaMerah} dari ${cleanKontingenMerah}. Bersiaplah.`;
     } else {
-      text = `Panggilan kepada partai nomor ${p.nomor_partai || ""}, di Gelanggang ${arenaNum}. Kategori ${cleanKategori}, ${cleanGender}, ${cleanKelas}. Pesilat, ${cleanNamaMerah} dari ${cleanKontingenMerah}. Selamat bertanding.`;
+      text = `Partai ${p.nomor_partai || ""}, Gelanggang ${arenaNum}. ${cleanKategori} ${cleanGender} ${prefixKelas}. Pesilat ${cleanNamaMerah} dari ${cleanKontingenMerah}. Bersiaplah.`;
     }
 
     console.log("Enqueueing speech announcement:", text);

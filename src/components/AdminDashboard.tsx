@@ -158,11 +158,13 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
     const cleanNamaBiru = p.nama_pesilat_biru ? p.nama_pesilat_biru.trim() : "";
     const cleanKontingenBiru = p.kontingen_biru ? p.kontingen_biru.trim() : "";
 
+    const prefixKelas = cleanKelas.toLowerCase().includes("kelas") || cleanKelas === "" ? cleanKelas : `kelas ${cleanKelas}`;
+    
     let text = "";
     if (cleanNamaBiru !== "") {
-      text = `Panggilan kepada partai nomor ${p.nomor_partai || ""}, di Gelanggang ${arenaNum}. Kategori ${cleanKategori}, ${cleanGender}, ${cleanKelas}. Di sudut merah, ${cleanNamaMerah} dari ${cleanKontingenMerah}, melawan di sudut biru, ${cleanNamaBiru} dari ${cleanKontingenBiru}. Selamat bertanding.`;
+      text = `Partai ${p.nomor_partai || ""}, Gelanggang ${arenaNum}. ${cleanKategori} ${cleanGender} ${prefixKelas}. Sudut biru ${cleanNamaBiru} dari ${cleanKontingenBiru}, melawan sudut merah ${cleanNamaMerah} dari ${cleanKontingenMerah}. Bersiaplah.`;
     } else {
-      text = `Panggilan kepada partai nomor ${p.nomor_partai || ""}, di Gelanggang ${arenaNum}. Kategori ${cleanKategori}, ${cleanGender}, ${cleanKelas}. Pesilat, ${cleanNamaMerah} dari ${cleanKontingenMerah}. Selamat bertanding.`;
+      text = `Partai ${p.nomor_partai || ""}, Gelanggang ${arenaNum}. ${cleanKategori} ${cleanGender} ${prefixKelas}. Pesilat ${cleanNamaMerah} dari ${cleanKontingenMerah}. Bersiaplah.`;
     }
 
     try {
