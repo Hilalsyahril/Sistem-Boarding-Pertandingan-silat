@@ -1036,6 +1036,41 @@ app.put("/api/pengaturan_arena", async (req, res) => {
   }
 });
 
+
+
+import { GoogleGenAI, Modality } from "@google/genai";
+
+// 8. TTS (Gemini Text-to-Speech)
+app.post("/api/tts", async (req, res) => {
+  try {
+    const { text } = req.body;
+    if (!text) {
+      return res.status(400).json({ error: "Text is required" });
+    }
+
+    // Menggunakan free API proxy untuk TikTok TTS (suara manusia, bukan google translate)
+    const ttsRes = await fetch("https://tiktok-tts.weilnet.workers.dev/api/generation", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        text: text,
+        voice: "id_001" // Indonesian voice
+      })
+    });
+    
+    const json = await ttsRes.json();
+    if (json.success && json.data) {
+      return res.json({ audio: json.data });
+    } else {
+      throw new Error(json.error || "Failed to generate audio");
+    }
+  } catch (error: any) {
+    console.error("TTS generation failed:", error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+
 // Server-side Vite or Production Static asset serving
 async function startServer() {
   if (process.env.NODE_ENV !== "production") {

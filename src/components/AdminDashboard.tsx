@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
+
+let globalAudioCtx: any = null;
 import { 
   Users, Settings, LogOut, Plus, Trash2, Edit2, ShieldAlert, CheckCircle, 
   UserPlus, RefreshCw, Layers, Award, UsersRound, HelpCircle, LayoutGrid,
@@ -26,7 +28,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
   const [kontingen, setKontingen] = useState<string>("");     // Sudut Merah
   const [namaPesilatBiru, setNamaPesilatBiru] = useState<string>(""); // Sudut Biru
   const [kontingenBiru, setKontingenBiru] = useState<string>("");     // Sudut Biru
-  const [kelas, setKelas] = useState<string>("Kelas A (45kg - 50kg)");
+  const [kelas, setKelas] = useState<string>("Kelas A");
   const [kategori, setKategori] = useState<string>("Tanding");
   const [gender, setGender] = useState<string>("Putra");
   const [arena, setArena] = useState<number>(1);
@@ -72,6 +74,8 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const processedTimeoutsRef = useRef<Set<string>>(new Set());
   const [isAudioEnabled, setIsAudioEnabled] = useState<boolean>(true);
+  const speechQueueRef = useRef<{ text: string; arenaNum: number; pesilatId: string }[]>([]);
+  const isSpeakingRef = useRef<boolean>(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<'all' | 'selected' | 'single' | null>(null);
   const [singleDeleteTarget, setSingleDeleteTarget] = useState<{ id: string, nama: string } | null>(null);
 
@@ -98,66 +102,56 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
     });
   };
 
-  const executeDeleteAll = async () => {
-    setError(null);
-    setSuccess(null);
-    setLoading(true);
-    setShowDeleteConfirm(null);
-    try {
-      const res = await fetch("/api/pesilat", { method: "DELETE" });
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error || "Gagal menghapus semua data.");
-      }
-      setSuccess("Semua data pesilat berhasil dihapus.");
-      setSelectedIds([]);
-      await fetchInitialData(3, 1500, true);
-    } catch (err: any) {
-      setError(err.message || "Gagal menghapus semua data.");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const executeDeleteSelected = async () => {
+  const handleDeleteSelected = () => {
     if (selectedIds.length === 0) return;
-    setError(null);
-    setSuccess(null);
-    setLoading(true);
-    setShowDeleteConfirm(null);
-    try {
-      const res = await fetch("/api/pesilat/delete-batch", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ids: selectedIds })
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error || "Gagal menghapus data terpilih.");
-      }
-      setSuccess(`Berhasil menghapus ${selectedIds.length} data pesilat terpilih.`);
-      setSelectedIds([]);
-      await fetchInitialData(3, 1500, true);
-    } catch (err: any) {
-      setError(err.message || "Gagal menghapus data terpilih.");
-    } finally {
-      setLoading(false);
-    }
+    setShowDeleteConfirm('selected');
   };
 
   const handleDeleteAll = () => {
     setShowDeleteConfirm('all');
   };
 
-  const handleDeleteSelected = () => {
-    setShowDeleteConfirm('selected');
+  const executeDeleteAll = async () => {
+    setError(null);
+    setSuccess(null);
+    setLoading(true);
+    setShowDeleteConfirm(null);
+    try {
+      const res = await fetch('/api/pesilat', { method: 'DELETE' });
+      if (!res.ok) {
+        throw new Error("Gagal menghapus semua data");
+      }
+      setSuccess("Berhasil menghapus semua data pesilat.");
+      setSelectedIds([]);
+      fetchInitialData(3, 1500, true);
+    } catch (err: any) {
+      setError(err.message || "Gagal menghapus semua data");
+    } finally {
+      setLoading(false);
+    }
   };
-  const activeUtterancesRef = useRef<any[]>([]);
-  const speechQueueRef = useRef<{ text: string; arenaNum: number; pesilatId: string }[]>([]);
-  const isSpeakingRef = useRef<boolean>(false);
+
+  const executeDeleteSelected = async () => {
+    setError(null);
+    setSuccess(null);
+    setLoading(true);
+    setShowDeleteConfirm(null);
+    try {
+      for (const id of selectedIds) {
+        await fetch(`/api/pesilat/${id}`, { method: 'DELETE' });
+      }
+      setSuccess("Berhasil menghapus data pesilat yang dipilih.");
+      setSelectedIds([]);
+      fetchInitialData(3, 1500, true);
+    } catch (err: any) {
+      setError(err.message || "Gagal menghapus data");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // Process speech queue sequentially to prevent overlap and lockouts
-  const processQueue = () => {
+  const processQueue = async () => {
     if (!isAudioEnabled) {
       speechQueueRef.current = [];
       isSpeakingRef.current = false;
@@ -169,73 +163,93 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
     const current = speechQueueRef.current[0];
     isSpeakingRef.current = true;
 
-    if (!("speechSynthesis" in window)) {
-      isSpeakingRef.current = false;
-      speechQueueRef.current.shift();
-      return;
-    }
-
-    // Pastikan engine tidak ter-pause
-    try {
-      window.speechSynthesis.resume();
-    } catch (e) {
-      console.warn("Gagal resume speech:", e);
-    }
-
-    const utterance = new SpeechSynthesisUtterance(current.text);
-    
-    // Gunakan suara Bahasa Indonesia jika ada
-    const voices = window.speechSynthesis.getVoices();
-    const idVoice = voices.find(voice => voice.lang.startsWith("id") || voice.lang.includes("ID") || voice.lang.includes("id-ID"));
-    if (idVoice) {
-      utterance.voice = idVoice;
-    }
-    
-    utterance.lang = "id-ID";
-    utterance.rate = 0.85; // Sedikit santai agar terdengar berwibawa
-    utterance.pitch = 1.0;
-
-    // Hitung estimasi waktu bicara (misal 1 karakter ~75ms) ditambah buffer keamanan
-    const charCount = current.text.length;
-    const estimatedDurationMs = Math.max(4000, (charCount * 75) + 2000);
-
     let isDone = false;
+    let safetyTimeout: any;
+
     const finishUtterance = () => {
       if (isDone) return;
       isDone = true;
-      clearTimeout(safetyTimeout);
-      activeUtterancesRef.current = activeUtterancesRef.current.filter(u => u !== utterance);
+      if (safetyTimeout) clearTimeout(safetyTimeout);
       isSpeakingRef.current = false;
       speechQueueRef.current.shift();
-      // Sedikit jeda antar panggilan agar lebih berwibawa dan teratur
       setTimeout(() => {
         processQueue();
       }, 1000);
     };
 
-    // Safety timeout to reset speech queue if synthesis gets stuck in browser engine
-    const safetyTimeout = setTimeout(() => {
-      console.warn("SpeechSynthesis stuck, forcing queue skip...");
-      finishUtterance();
-    }, estimatedDurationMs);
-
-    activeUtterancesRef.current.push(utterance);
-
-    utterance.onend = () => {
-      console.log("Speech finished normally");
-      finishUtterance();
-    };
-
-    utterance.onerror = (e) => {
-      console.warn("Speech error:", e);
-      finishUtterance();
-    };
-    
     try {
-      window.speechSynthesis.speak(utterance);
+      const res = await fetch("/api/tts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: current.text })
+      });
+      if (!res.ok) throw new Error("TTS Backend failed");
+      const data = await res.json();
+      if (!data.audio) throw new Error("No audio returned");
+
+      if (!globalAudioCtx) {
+        const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+        globalAudioCtx = new AudioContextClass();
+      }
+      if (globalAudioCtx.state === 'suspended') {
+        await globalAudioCtx.resume();
+      }
+      const audioCtx = globalAudioCtx;
+      
+      const binaryString = atob(data.audio);
+      const bytes = new Uint8Array(binaryString.length);
+      for (let i = 0; i < binaryString.length; i++) {
+        bytes[i] = binaryString.charCodeAt(i);
+      }
+      
+      // Decode MP3 audio data
+      const audioBuffer = await audioCtx.decodeAudioData(bytes.buffer);
+      
+      const source = audioCtx.createBufferSource();
+      source.buffer = audioBuffer;
+      source.connect(audioCtx.destination);
+      source.onended = () => {
+        finishUtterance();
+      };
+      
+      const durationMs = (audioBuffer.length / audioBuffer.sampleRate) * 1000;
+      safetyTimeout = setTimeout(() => finishUtterance(), durationMs + 2000);
+
+      source.start();
+
     } catch (err) {
-      console.error("Gagal memanggil speechSynthesis.speak:", err);
-      finishUtterance();
+      console.warn("High-quality TTS failed, falling back to browser synthesis:", err);
+      if (!("speechSynthesis" in window)) {
+        finishUtterance();
+        return;
+      }
+      
+      window.speechSynthesis.cancel();
+      const utterance = new SpeechSynthesisUtterance(current.text);
+      const voices = window.speechSynthesis.getVoices();
+      let idVoice = voices.find(v => (v.lang.includes("id") || v.lang.includes("ID")) && (v.name.includes("Natural") || v.name.includes("Online")));
+      if (!idVoice) idVoice = voices.find(v => (v.lang.includes("id") || v.lang.includes("ID")) && v.name.includes("Premium"));
+      if (!idVoice) idVoice = voices.find(v => (v.lang.includes("id") || v.lang.includes("ID")) && v.name.includes("Google"));
+      if (!idVoice) idVoice = voices.find(v => (v.lang.includes("id") || v.lang.includes("ID")));
+      if (idVoice) utterance.voice = idVoice;
+      utterance.lang = "id-ID";
+      utterance.rate = 0.82;
+      utterance.pitch = 0.95;
+
+      const charCount = current.text.length;
+      const estimatedDurationMs = Math.max(4000, (charCount * 80) + 2000);
+      safetyTimeout = setTimeout(() => {
+        finishUtterance();
+      }, estimatedDurationMs);
+
+      utterance.onend = finishUtterance;
+      utterance.onerror = finishUtterance;
+      
+      try {
+        window.speechSynthesis.speak(utterance);
+      } catch (e) {
+        finishUtterance();
+      }
     }
   };
 
@@ -286,18 +300,24 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
 
   // Dropdown Options
   const opsiKelas = [
-    "Kelas A (45kg - 50kg)",
-    "Kelas B (50kg - 55kg)",
-    "Kelas C (55kg - 60kg)",
-    "Kelas D (60kg - 65kg)",
-    "Kelas E (65kg - 70kg)",
-    "Kelas F (70kg - 75kg)",
-    "Kelas G (75kg - 80kg)",
-    "Kelas H (80kg - 85kg)",
-    "Kelas I (85kg - 90kg)",
+    "Kelas A",
+    "Kelas B",
+    "Kelas C",
+    "Kelas D",
+    "Kelas E",
+    "Kelas F",
+    "Kelas G",
+    "Kelas H",
+    "Kelas I",
+    "Kelas J",
+    "Kelas K",
+    "Kelas L",
+    "Kelas M",
+    "Kelas N",
     "Seni Tunggal",
     "Seni Ganda",
-    "Seni Regu"
+    "Seni Regu",
+    "Seni Solo Kreatif"
   ];
   
   const opsiKategori = ["Tanding", "Tunggal", "Ganda", "Regu"];
@@ -602,7 +622,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
         "Sudut Biru (Kontingen)": "Tapak Suci Bandung",
         "Sudut Merah (Nama Pesilat)": "Hilal Syahril",
         "Sudut Merah (Kontingen)": "PBR Jakarta",
-        "Kelas": "Kelas A (45kg - 50kg)",
+        "Kelas": "Kelas A",
         "Kategori": "Tanding",
         "Gender": "Putra",
         "Arena": 1,
@@ -614,7 +634,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
         "Sudut Biru (Kontingen)": "Siliwangi Bogor",
         "Sudut Merah (Nama Pesilat)": "Siti Aminah",
         "Sudut Merah (Kontingen)": "Kera Sakti Surabaya",
-        "Kelas": "Kelas B (50kg - 55kg)",
+        "Kelas": "Kelas B",
         "Kategori": "Tanding",
         "Gender": "Putri",
         "Arena": 2,
@@ -879,7 +899,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
     setKontingen("");
     setNamaPesilatBiru("");
     setKontingenBiru("");
-    setKelas("Kelas A (45kg - 50kg)");
+    setKelas("Kelas A");
     setKategori("Tanding");
     setGender("Putra");
     setArena(1);
@@ -1277,13 +1297,8 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                                 </span>
                               </div>
 
-                              {/* Sudut Merah vs Sudut Biru display */}
+                              {/* Sudut Biru vs Sudut Merah display */}
                               <div className="grid grid-cols-2 gap-2 text-center text-xs mt-3">
-                                <div className="p-2 rounded-lg bg-red-500/10 border border-red-500/25 text-red-200">
-                                  <p className="font-mono text-[9px] text-red-400 font-bold tracking-widest uppercase mb-0.5">MERAH</p>
-                                  <p className="font-black truncate text-xs">{activePesilat.nama_pesilat}</p>
-                                  <p className="text-[9px] text-red-300/70 truncate mt-0.5 font-medium">{activePesilat.kontingen}</p>
-                                </div>
                                 {activePesilat.nama_pesilat_biru ? (
                                   <div className="p-2 rounded-lg bg-blue-500/10 border border-blue-500/25 text-blue-200">
                                     <p className="font-mono text-[9px] text-blue-400 font-bold tracking-widest uppercase mb-0.5">BIRU</p>
@@ -1296,6 +1311,11 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                                     <span>TUNGGAL</span>
                                   </div>
                                 )}
+                                <div className="p-2 rounded-lg bg-red-500/10 border border-red-500/25 text-red-200">
+                                  <p className="font-mono text-[9px] text-red-400 font-bold tracking-widest uppercase mb-0.5">MERAH</p>
+                                  <p className="font-black truncate text-xs">{activePesilat.nama_pesilat}</p>
+                                  <p className="text-[9px] text-red-300/70 truncate mt-0.5 font-medium">{activePesilat.kontingen}</p>
+                                </div>
                               </div>
                             </div>
 

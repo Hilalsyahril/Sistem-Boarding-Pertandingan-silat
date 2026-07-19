@@ -1,27 +1,80 @@
-import React, { useState } from "react";
-import { Lock, User, ShieldAlert, Award } from "lucide-react";
+import React, { useState, useEffect } from "react";
+import { Lock, User, ShieldAlert, Award, KeyRound, Info } from "lucide-react";
 
 interface AdminLoginProps {
   onLoginSuccess: () => void;
 }
 
 export default function AdminLogin({ onLoginSuccess }: AdminLoginProps) {
+  const [mode, setMode] = useState<"login" | "edit" | "forgot">("login");
+  
   const [username, setUsername] = useState<string>("");
   const [password, setPassword] = useState<string>("");
+  
+  // Edit Password fields
+  const [oldPassword, setOldPassword] = useState<string>("");
+  const [newPassword, setNewPassword] = useState<string>("");
+  
   const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
 
-  // Hardcoded credentials for prototype
-  const HARDCODED_USER = "admin";
-  const HARDCODED_PASS = "silat2026";
+  // Initialize default credentials
+  useEffect(() => {
+    if (!localStorage.getItem("adminUsername")) {
+      localStorage.setItem("adminUsername", "operatorDB");
+    }
+    if (!localStorage.getItem("adminPassword")) {
+      localStorage.setItem("adminPassword", "silat2026");
+    }
+  }, []);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
-    if (username === HARDCODED_USER && password === HARDCODED_PASS) {
+    const validUser = localStorage.getItem("adminUsername") || "operatorDB";
+    const validPass = localStorage.getItem("adminPassword") || "silat2026";
+    
+    if (username === validUser && password === validPass) {
       setError(null);
       onLoginSuccess();
     } else {
       setError("Username atau Password salah!");
     }
+  };
+
+  const handleEditPassword = (e: React.FormEvent) => {
+    e.preventDefault();
+    const validUser = localStorage.getItem("adminUsername") || "operatorDB";
+    const validPass = localStorage.getItem("adminPassword") || "silat2026";
+    
+    if (username !== validUser || oldPassword !== validPass) {
+      setError("Username atau Password Lama salah!");
+      setSuccess(null);
+      return;
+    }
+    
+    if (newPassword.length < 6) {
+      setError("Password baru minimal 6 karakter!");
+      setSuccess(null);
+      return;
+    }
+
+    localStorage.setItem("adminPassword", newPassword);
+    setSuccess("Password berhasil diubah! Silakan login.");
+    setError(null);
+    setMode("login");
+    setPassword("");
+    setOldPassword("");
+    setNewPassword("");
+  };
+
+  const switchMode = (newMode: "login" | "edit" | "forgot") => {
+    setMode(newMode);
+    setError(null);
+    setSuccess(null);
+    setUsername("");
+    setPassword("");
+    setOldPassword("");
+    setNewPassword("");
   };
 
   return (
@@ -44,72 +97,183 @@ export default function AdminLogin({ onLoginSuccess }: AdminLoginProps) {
           </p>
         </div>
 
-        {/* Alert Error */}
+        {/* Alerts */}
         {error && (
           <div className="mb-4 bg-rose-950/40 border border-rose-800 text-rose-200 text-xs p-3 rounded-xl flex items-center gap-2">
             <ShieldAlert className="w-4 h-4 text-rose-500 shrink-0" />
             <span>{error}</span>
           </div>
         )}
-
-        {/* Form */}
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5 font-mono">
-              Username
-            </label>
-            <div className="relative">
-              <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-500">
-                <User className="w-4 h-4" />
-              </span>
-              <input
-                type="text"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                placeholder="Masukkan username"
-                className="w-full bg-slate-950 border border-slate-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-white rounded-xl py-2.5 pl-10 pr-4 text-sm outline-none transition"
-                required
-              />
-            </div>
+        {success && (
+          <div className="mb-4 bg-emerald-950/40 border border-emerald-800 text-emerald-200 text-xs p-3 rounded-xl flex items-center gap-2">
+            <KeyRound className="w-4 h-4 text-emerald-500 shrink-0" />
+            <span>{success}</span>
           </div>
+        )}
 
-          <div>
-            <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5 font-mono">
-              Password
-            </label>
-            <div className="relative">
-              <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-500">
-                <Lock className="w-4 h-4" />
-              </span>
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="Masukkan password"
-                className="w-full bg-slate-950 border border-slate-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-white rounded-xl py-2.5 pl-10 pr-4 text-sm outline-none transition"
-                required
-              />
+        {/* Dynamic Content */}
+        {mode === "login" && (
+          <form onSubmit={handleLogin} className="space-y-4">
+            <div>
+              <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5 font-mono">
+                Username
+              </label>
+              <div className="relative">
+                <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-500">
+                  <User className="w-4 h-4" />
+                </span>
+                <input
+                  type="text"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  placeholder="Masukkan username"
+                  className="w-full bg-slate-950 border border-slate-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-white rounded-xl py-2.5 pl-10 pr-4 text-sm outline-none transition"
+                  required
+                />
+              </div>
             </div>
-          </div>
 
-          <button
-            type="submit"
-            className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-black py-2.5 rounded-xl transition duration-200 text-sm shadow-lg shadow-indigo-600/20 mt-2 font-display uppercase tracking-wider"
-          >
-            Masuk ke Dashboard
-          </button>
-        </form>
-
-        {/* Demo Credentials Helper */}
-        <div className="mt-6 border-t border-slate-800 pt-4">
-          <div className="bg-slate-950/80 rounded-2xl p-3 border border-slate-800 text-[11px] text-slate-400">
-            <p className="font-semibold text-slate-300 mb-1 font-mono uppercase tracking-wider text-[9px]">Kredensial Demo:</p>
-            <div className="grid grid-cols-2 gap-1 font-mono">
-              <div>Username: <span className="text-amber-400 font-bold">{HARDCODED_USER}</span></div>
-              <div>Password: <span className="text-amber-400 font-bold">{HARDCODED_PASS}</span></div>
+            <div>
+              <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5 font-mono">
+                Password
+              </label>
+              <div className="relative">
+                <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-500">
+                  <Lock className="w-4 h-4" />
+                </span>
+                <input
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="Masukkan password"
+                  className="w-full bg-slate-950 border border-slate-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-white rounded-xl py-2.5 pl-10 pr-4 text-sm outline-none transition"
+                  required
+                />
+              </div>
             </div>
+
+            <button
+              type="submit"
+              className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-black py-2.5 rounded-xl transition duration-200 text-sm shadow-lg shadow-indigo-600/20 mt-2 font-display uppercase tracking-wider"
+            >
+              Masuk ke Dashboard
+            </button>
+
+            <div className="flex justify-between items-center mt-4 text-[10px] sm:text-xs font-mono font-bold">
+              <button
+                type="button"
+                onClick={() => switchMode("forgot")}
+                className="text-slate-400 hover:text-indigo-400 transition"
+              >
+                Lupa Password?
+              </button>
+              <button
+                type="button"
+                onClick={() => switchMode("edit")}
+                className="text-slate-400 hover:text-indigo-400 transition"
+              >
+                Edit Password
+              </button>
+            </div>
+          </form>
+        )}
+
+        {mode === "edit" && (
+          <form onSubmit={handleEditPassword} className="space-y-4">
+            <div>
+              <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5 font-mono">
+                Username
+              </label>
+              <div className="relative">
+                <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-500">
+                  <User className="w-4 h-4" />
+                </span>
+                <input
+                  type="text"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  placeholder="Masukkan username"
+                  className="w-full bg-slate-950 border border-slate-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-white rounded-xl py-2.5 pl-10 pr-4 text-sm outline-none transition"
+                  required
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5 font-mono">
+                Password Lama
+              </label>
+              <div className="relative">
+                <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-500">
+                  <Lock className="w-4 h-4" />
+                </span>
+                <input
+                  type="password"
+                  value={oldPassword}
+                  onChange={(e) => setOldPassword(e.target.value)}
+                  placeholder="Masukkan password lama"
+                  className="w-full bg-slate-950 border border-slate-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-white rounded-xl py-2.5 pl-10 pr-4 text-sm outline-none transition"
+                  required
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5 font-mono">
+                Password Baru
+              </label>
+              <div className="relative">
+                <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-500">
+                  <KeyRound className="w-4 h-4" />
+                </span>
+                <input
+                  type="password"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  placeholder="Masukkan password baru"
+                  className="w-full bg-slate-950 border border-slate-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-white rounded-xl py-2.5 pl-10 pr-4 text-sm outline-none transition"
+                  required
+                />
+              </div>
+            </div>
+
+            <button
+              type="submit"
+              className="w-full bg-amber-600 hover:bg-amber-700 text-white font-black py-2.5 rounded-xl transition duration-200 text-sm shadow-lg shadow-amber-600/20 mt-2 font-display uppercase tracking-wider"
+            >
+              Simpan Password Baru
+            </button>
+            
+            <button
+              type="button"
+              onClick={() => switchMode("login")}
+              className="w-full text-slate-400 hover:text-white font-bold py-2 rounded-xl transition duration-200 text-[10px] sm:text-xs uppercase tracking-wider"
+            >
+              Kembali ke Login
+            </button>
+          </form>
+        )}
+
+        {mode === "forgot" && (
+          <div className="space-y-4 text-center py-4">
+            <div className="w-16 h-16 bg-blue-500/10 rounded-full flex items-center justify-center mx-auto mb-4 border border-blue-500/20">
+              <Info className="w-8 h-8 text-blue-400" />
+            </div>
+            <h3 className="text-white font-bold mb-2">Lupa Password?</h3>
+            <p className="text-sm text-slate-400 mb-6">
+              Untuk alasan keamanan, sistem ini tidak memiliki fitur pemulihan password otomatis. Silakan hubungi Administrator IT atau Penanggung Jawab Sistem (IT Support) di lokasi untuk mengatur ulang kredensial Anda.
+            </p>
+            
+            <button
+              type="button"
+              onClick={() => switchMode("login")}
+              className="w-full bg-slate-800 hover:bg-slate-700 text-white font-black py-2.5 rounded-xl transition duration-200 text-sm uppercase tracking-wider"
+            >
+              Kembali
+            </button>
           </div>
-        </div>
+        )}
+
       </div>
     </div>
   );

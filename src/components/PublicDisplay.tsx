@@ -1,4 +1,6 @@
 import React, { useEffect, useState, useRef } from "react";
+
+let globalAudioCtx: any = null;
 import { createClient } from "@supabase/supabase-js";
 import { Shield, Users, Award, Zap, AlertCircle, RefreshCw, Trophy, Volume2, VolumeX } from "lucide-react";
 import { Pesilat, ConfigStatus } from "../types";
@@ -19,42 +21,31 @@ export default function PublicDisplay() {
   const speechQueueRef = useRef<{ text: string; arenaNum: number; pesilatId: string }[]>([]);
   const isSpeakingRef = useRef<boolean>(false);
 
-  // Monitor first user interaction to unlock SpeechSynthesis restriction in browsers
-  useEffect(() => {
-    const handleInteraction = () => {
-      setHasInteracted(true);
-      if ("speechSynthesis" in window) {
-        try {
-          window.speechSynthesis.cancel();
-        } catch (e) {
-          console.warn(e);
-        }
-      }
-      window.removeEventListener("click", handleInteraction);
-      window.removeEventListener("touchstart", handleInteraction);
-    };
-    window.addEventListener("click", handleInteraction);
-    window.addEventListener("touchstart", handleInteraction);
-    return () => {
-      window.removeEventListener("click", handleInteraction);
-      window.removeEventListener("touchstart", handleInteraction);
-    };
-  }, []);
-
-  // Pre-load / warm up SpeechSynthesis voices list
+  // Removed auto-unlock to comply with browser audio policies
   useEffect(() => {
     if ("speechSynthesis" in window) {
       window.speechSynthesis.getVoices();
-      if (window.speechSynthesis.onvoiceschanged !== undefined) {
-        window.speechSynthesis.onvoiceschanged = () => {
-          window.speechSynthesis.getVoices();
-        };
-      }
     }
   }, []);
 
-  // Process speech queue sequentially to prevent overlap and lockouts
-  const processQueue = () => {
+  const handleInteraction = () => {
+    setHasInteracted(true);
+    
+    // Unlock Web Audio API
+    try {
+      const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+      if (!globalAudioCtx) {
+        globalAudioCtx = new AudioContextClass();
+      }
+      if (globalAudioCtx.state === 'suspended') {
+        globalAudioCtx.resume();
+      }
+    } catch (e) {
+      console.warn("Failed to initialize AudioContext", e);
+    }
+  };
+
+  const processQueue = async () => {
     if (!isAudioEnabled) {
       speechQueueRef.current = [];
       isSpeakingRef.current = false;
@@ -66,73 +57,93 @@ export default function PublicDisplay() {
     const current = speechQueueRef.current[0];
     isSpeakingRef.current = true;
 
-    if (!("speechSynthesis" in window)) {
-      isSpeakingRef.current = false;
-      speechQueueRef.current.shift();
-      return;
-    }
-
-    // Pastikan engine tidak ter-pause
-    try {
-      window.speechSynthesis.resume();
-    } catch (e) {
-      console.warn("Gagal resume speech:", e);
-    }
-
-    const utterance = new SpeechSynthesisUtterance(current.text);
-    
-    // Gunakan suara Bahasa Indonesia jika ada
-    const voices = window.speechSynthesis.getVoices();
-    const idVoice = voices.find(voice => voice.lang.startsWith("id") || voice.lang.includes("ID") || voice.lang.includes("id-ID"));
-    if (idVoice) {
-      utterance.voice = idVoice;
-    }
-    
-    utterance.lang = "id-ID";
-    utterance.rate = 0.85; // Sedikit santai agar terdengar berwibawa
-    utterance.pitch = 1.0;
-
-    // Hitung estimasi waktu bicara (misal 1 karakter ~75ms) ditambah buffer keamanan
-    const charCount = current.text.length;
-    const estimatedDurationMs = Math.max(4000, (charCount * 75) + 2000);
-
     let isDone = false;
+    let safetyTimeout: any;
+
     const finishUtterance = () => {
       if (isDone) return;
       isDone = true;
-      clearTimeout(safetyTimeout);
-      activeUtterancesRef.current = activeUtterancesRef.current.filter(u => u !== utterance);
+      if (safetyTimeout) clearTimeout(safetyTimeout);
       isSpeakingRef.current = false;
       speechQueueRef.current.shift();
-      // Sedikit jeda antar panggilan agar lebih berwibawa dan teratur
       setTimeout(() => {
         processQueue();
-      }, 1000);
+      }, 150);
     };
 
-    // Safety timeout to reset speech queue if synthesis gets stuck in browser engine
-    const safetyTimeout = setTimeout(() => {
-      console.warn("SpeechSynthesis stuck, forcing queue skip...");
-      finishUtterance();
-    }, estimatedDurationMs);
-
-    activeUtterancesRef.current.push(utterance);
-
-    utterance.onend = () => {
-      console.log("Speech finished normally");
-      finishUtterance();
-    };
-
-    utterance.onerror = (e) => {
-      console.warn("Speech error:", e);
-      finishUtterance();
-    };
-    
     try {
-      window.speechSynthesis.speak(utterance);
+      const res = await fetch("/api/tts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: current.text })
+      });
+      if (!res.ok) throw new Error("TTS Backend failed");
+      const data = await res.json();
+      if (!data.audio) throw new Error("No audio returned");
+
+      if (!globalAudioCtx) {
+        const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+        globalAudioCtx = new AudioContextClass();
+      }
+      if (globalAudioCtx.state === 'suspended') {
+        await globalAudioCtx.resume();
+      }
+      const audioCtx = globalAudioCtx;
+      
+      const binaryString = atob(data.audio);
+      const bytes = new Uint8Array(binaryString.length);
+      for (let i = 0; i < binaryString.length; i++) {
+        bytes[i] = binaryString.charCodeAt(i);
+      }
+      
+      // Decode MP3 audio data
+      const audioBuffer = await audioCtx.decodeAudioData(bytes.buffer);
+      
+      const source = audioCtx.createBufferSource();
+      source.buffer = audioBuffer;
+      source.connect(audioCtx.destination);
+      source.onended = () => {
+        finishUtterance();
+      };
+      
+      const durationMs = (audioBuffer.length / audioBuffer.sampleRate) * 1000;
+      safetyTimeout = setTimeout(() => finishUtterance(), durationMs + 500);
+
+      source.start();
+
     } catch (err) {
-      console.error("Gagal memanggil speechSynthesis.speak:", err);
-      finishUtterance();
+      console.warn("High-quality TTS failed, falling back to browser synthesis:", err);
+      if (!("speechSynthesis" in window)) {
+        finishUtterance();
+        return;
+      }
+      
+      window.speechSynthesis.cancel();
+      const utterance = new SpeechSynthesisUtterance(current.text);
+      const voices = window.speechSynthesis.getVoices();
+      let idVoice = voices.find(v => (v.lang.includes("id") || v.lang.includes("ID")) && (v.name.includes("Natural") || v.name.includes("Online")));
+      if (!idVoice) idVoice = voices.find(v => (v.lang.includes("id") || v.lang.includes("ID")) && v.name.includes("Premium"));
+      if (!idVoice) idVoice = voices.find(v => (v.lang.includes("id") || v.lang.includes("ID")) && v.name.includes("Google"));
+      if (!idVoice) idVoice = voices.find(v => (v.lang.includes("id") || v.lang.includes("ID")));
+      if (idVoice) utterance.voice = idVoice;
+      utterance.lang = "id-ID";
+      utterance.rate = 0.82;
+      utterance.pitch = 0.95;
+
+      const charCount = current.text.length;
+      const estimatedDurationMs = Math.max(2000, (charCount * 80) + 500);
+      safetyTimeout = setTimeout(() => {
+        finishUtterance();
+      }, estimatedDurationMs);
+
+      utterance.onend = finishUtterance;
+      utterance.onerror = finishUtterance;
+      
+      try {
+        window.speechSynthesis.speak(utterance);
+      } catch (e) {
+        finishUtterance();
+      }
     }
   };
 
@@ -158,7 +169,7 @@ export default function PublicDisplay() {
 
     let text = "";
     if (cleanNamaBiru !== "") {
-      text = `Panggilan kepada partai nomor ${p.nomor_partai || ""}, di Gelanggang ${arenaNum}. Kategori ${cleanKategori}, ${cleanGender}, ${cleanKelas}. Di sudut merah, ${cleanNamaMerah} dari ${cleanKontingenMerah}, melawan di sudut biru, ${cleanNamaBiru} dari ${cleanKontingenBiru}. Selamat bertanding.`;
+      text = `Panggilan kepada partai nomor ${p.nomor_partai || ""}, di Gelanggang ${arenaNum}. Kategori ${cleanKategori}, ${cleanGender}, ${cleanKelas}. Di sudut biru, ${cleanNamaBiru} dari ${cleanKontingenBiru}, melawan di sudut merah, ${cleanNamaMerah} dari ${cleanKontingenMerah}. Selamat bertanding.`;
     } else {
       text = `Panggilan kepada partai nomor ${p.nomor_partai || ""}, di Gelanggang ${arenaNum}. Kategori ${cleanKategori}, ${cleanGender}, ${cleanKelas}. Pesilat, ${cleanNamaMerah} dari ${cleanKontingenMerah}. Selamat bertanding.`;
     }
@@ -384,7 +395,7 @@ export default function PublicDisplay() {
     console.log("Menjalankan failsafe background polling untuk kestabilan display...");
     fallbackInterval = setInterval(() => {
       fetchLatestDataFallback();
-    }, 3000); // Polling setiap 3 detik
+    }, 500); // Polling setiap 500ms untuk respon lebih cepat
 
     // Fungsi untuk mengambil pesilat terbaru (digunakan oleh real-time callback)
     async function fetchLatestPesilat() {
@@ -513,7 +524,8 @@ export default function PublicDisplay() {
         queueMaxHeight: "max-h-[64px]",
         queueItemPadding: "py-1 px-2",
         hideQueue: false,
-        hideFooter: false
+        hideFooter: false,
+        onlyShowParty: false
       };
     }
     if (count === 2) {
@@ -531,7 +543,8 @@ export default function PublicDisplay() {
         queueMaxHeight: "max-h-[50px]",
         queueItemPadding: "py-0.5 px-2",
         hideQueue: false,
-        hideFooter: false
+        hideFooter: false,
+        onlyShowParty: false
       };
     }
     if (count === 3) {
@@ -549,7 +562,8 @@ export default function PublicDisplay() {
         queueMaxHeight: "max-h-[36px]",
         queueItemPadding: "py-0.5 px-1.5",
         hideQueue: false,
-        hideFooter: true
+        hideFooter: true,
+        onlyShowParty: false
       };
     }
     if (count === 4) {
@@ -567,13 +581,37 @@ export default function PublicDisplay() {
         queueMaxHeight: "max-h-[30px]",
         queueItemPadding: "p-0.5",
         hideQueue: true,
-        hideFooter: true
+        hideFooter: true,
+        onlyShowParty: false
       };
     }
-    // 5 atau lebih arena
+    if (count > 6) {
+      // Lebih dari 6 arena, kita hanya tampilkan nomor partai besar
+      let cols = "grid-cols-2 sm:grid-cols-3 lg:grid-cols-4";
+      if (count > 8) cols = "grid-cols-3 sm:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6";
+      
+      return {
+        gridCols: cols,
+        gridRows: "", // Let it flow naturally
+        cardPadding: "p-2 gap-1",
+        headerPadding: "p-1",
+        headerTitle: "text-xs sm:text-sm",
+        partySize: "text-[4rem] sm:text-[5.5rem] md:text-[7rem]", // Make it proportional to fit
+        metaTextSize: "text-[8px] px-1 py-0.25",
+        competitorText: "text-[9px]",
+        competitorPadding: "p-1 border-l",
+        timerText: "text-[9px]",
+        queueMaxHeight: "max-h-[20px]",
+        queueItemPadding: "p-0.5",
+        hideQueue: true,
+        hideFooter: true,
+        onlyShowParty: true
+      };
+    }
+    // 5 - 6 arena
     return {
       gridCols: "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3",
-      gridRows: "grid-rows-6 sm:grid-rows-3 lg:grid-rows-2",
+      gridRows: "grid-rows-auto sm:grid-rows-3 lg:grid-rows-2",
       cardPadding: "p-1.5 gap-1",
       headerPadding: "p-1 sm:p-1.5",
       headerTitle: "text-xs sm:text-sm md:text-base",
@@ -585,7 +623,8 @@ export default function PublicDisplay() {
       queueMaxHeight: "max-h-[30px]",
       queueItemPadding: "p-0.5",
       hideQueue: true,
-      hideFooter: true
+      hideFooter: true,
+      onlyShowParty: false
     };
   };
 
@@ -594,18 +633,18 @@ export default function PublicDisplay() {
   return (
     <div className="h-screen w-screen max-h-screen max-w-full overflow-hidden bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-slate-900 to-slate-950 text-white font-sans p-2 sm:p-3 select-none flex flex-col justify-between">
       {/* HEADER UTAMA - VIBRANT PALETTE INDIGO HEADER WITH WHITE ROTATING LOGO */}
-      <header className="bg-indigo-700 p-2.5 sm:p-3 rounded-2xl flex flex-col md:flex-row md:items-center md:justify-between border-b-2 sm:border-b-4 border-indigo-500 shadow-xl mb-1.5 sm:mb-2.5 gap-2">
+      <header className="bg-gradient-to-br from-yellow-400 via-amber-500 to-red-600 p-2.5 sm:p-3 rounded-2xl flex flex-col md:flex-row md:items-center md:justify-between border-b-2 sm:border-b-4 border-amber-600 shadow-xl mb-1.5 sm:mb-2.5 gap-2">
         <div className="flex items-center gap-3">
           <div className="w-9 h-9 bg-white rounded-full flex items-center justify-center shrink-0 shadow-lg">
-            <div className="w-6 h-6 bg-indigo-700 rotate-45 flex items-center justify-center">
+            <div className="w-6 h-6 bg-red-600 rotate-45 flex items-center justify-center">
               <span className="text-white font-bold -rotate-45 text-[10px]">IPS</span>
             </div>
           </div>
           <div>
             <h1 className="text-sm sm:text-base md:text-lg font-black tracking-tight uppercase text-white font-display">
-              SISTEM BOARDING <span className="text-amber-300">PENCAK SILAT</span>
+              SISTEM BOARDING <span className="text-white">PENCAK SILAT</span>
             </h1>
-            <p className="text-indigo-200 text-[8px] sm:text-[10px] font-semibold tracking-widest uppercase">
+            <p className="text-amber-100 text-[8px] sm:text-[10px] font-semibold tracking-widest uppercase">
               Live Boarding System • Real-time Monitoring
             </p>
           </div>
@@ -659,33 +698,24 @@ export default function PublicDisplay() {
         </div>
       </header>
 
-      {/* BANNER AKTIVASI AUDIO INTERAKSI PERTAMA */}
-      {!hasInteracted && isAudioEnabled && (
-        <div 
-          onClick={() => {
-            setHasInteracted(true);
-            if ("speechSynthesis" in window) {
-              window.speechSynthesis.cancel();
-              const welcome = new SpeechSynthesisUtterance("Fitur suara aktif");
-              const voices = window.speechSynthesis.getVoices();
-              const idVoice = voices.find(voice => voice.lang.startsWith("id") || voice.lang.includes("ID") || voice.lang.includes("id-ID"));
-              if (idVoice) welcome.voice = idVoice;
-              welcome.lang = "id-ID";
-              welcome.rate = 1.0;
-              window.speechSynthesis.speak(welcome);
-            }
-          }}
-          className="mb-1.5 sm:mb-2 bg-gradient-to-r from-amber-400 to-amber-500 text-neutral-950 rounded-xl p-2 flex flex-col sm:flex-row items-center justify-between gap-2 cursor-pointer hover:brightness-105 transition shadow-lg border border-amber-300"
-        >
-          <div className="flex items-center gap-2">
-            <Volume2 className="w-4 h-4 shrink-0 text-neutral-950 animate-bounce" />
+
+
+      
+      {/* BANNER AKTIVASI SUARA */}
+      {!hasInteracted && (
+        <div className="bg-amber-400 text-neutral-900 px-4 py-3 rounded-xl mb-2 flex items-center justify-between border-2 border-amber-500 shadow-[0_0_15px_rgba(251,191,36,0.3)] animate-pulse">
+          <div className="flex items-center gap-3">
+            <Volume2 className="w-5 h-5 sm:w-6 sm:h-6" />
             <div>
-              <p className="font-black text-[10px] uppercase tracking-wide">🔉 Klik untuk mengaktifkan suara otomatis!</p>
-              <p className="text-[8px] font-semibold text-neutral-900 mt-0.5">Browser memblokir suara sebelum diklik.</p>
+              <h3 className="font-bold text-sm sm:text-base">Aktivasi Panggilan Suara Diperlukan</h3>
+              <p className="text-[10px] sm:text-xs font-medium">Browser memblokir pemutaran suara otomatis. Klik tombol di samping untuk mengaktifkan.</p>
             </div>
           </div>
-          <button className="bg-neutral-950 hover:bg-neutral-900 text-amber-300 px-2.5 py-1 rounded-lg text-[8px] font-black uppercase tracking-wider transition shrink-0 shadow-md cursor-pointer">
-            Mulai Suara
+          <button 
+            onClick={handleInteraction}
+            className="bg-neutral-900 text-amber-400 px-4 py-2 rounded-lg font-bold text-xs sm:text-sm hover:bg-neutral-800 transition active:scale-95 whitespace-nowrap"
+          >
+            Aktifkan Suara
           </button>
         </div>
       )}
@@ -733,14 +763,14 @@ export default function PublicDisplay() {
                   return a.nomor_partai.localeCompare(b.nomor_partai, undefined, { numeric: true, sensitivity: "base" });
                 });
 
-              const colors = ["bg-rose-600", "bg-indigo-600", "bg-amber-500", "bg-emerald-600", "bg-sky-600", "bg-violet-600"];
-              const arenaColor = playingPesilat ? colors[(arenaNum - 1) % colors.length] : "bg-slate-700";
+              const colors = ["bg-gradient-to-r from-yellow-400 via-amber-500 to-red-600", "bg-gradient-to-r from-amber-500 via-red-500 to-red-700", "bg-gradient-to-l from-yellow-400 via-amber-500 to-red-600"];
+              const arenaColor = playingPesilat ? "bg-gradient-to-r from-yellow-400 via-amber-500 to-red-600" : "bg-slate-700";
 
               return (
                 <div 
                   key={arenaNum}
                   id={`arena-${arenaNum}`}
-                  className="flex flex-col bg-slate-900 rounded-2xl border border-slate-850 shadow-xl overflow-hidden h-full min-h-0 hover:border-indigo-500/30 hover:shadow-indigo-500/5 transition duration-300"
+                  className="flex flex-col bg-slate-900 rounded-2xl border border-slate-850 shadow-xl overflow-hidden h-full min-h-0 hover:border-amber-600/30 hover:shadow-amber-500/10 transition duration-300"
                 >
                   {/* Arena Header - Vibrant Palette */}
                   <div className={`${arenaColor} ${layout.headerPadding} text-center border-b border-white/10 relative flex items-center justify-center min-h-[36px] sm:min-h-[44px]`}>
@@ -806,110 +836,107 @@ export default function PublicDisplay() {
                             {playingPesilat.nomor_partai || "01"}
                           </div>
                         </div>
-
                         {/* 2. DETAIL INFORMASI DI BAWAH NOMOR PARTAI */}
-                        <div className="bg-slate-950/80 border border-slate-850 p-2 sm:p-3 rounded-xl space-y-1.5 sm:space-y-2 shadow-inner min-h-0">
-                          
-                          {/* Metadata: Gender, Kategori & Kelas */}
-                          <div className="flex flex-wrap items-center justify-center gap-1 border-b border-slate-900 pb-1 text-center">
-                            <span className={`bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 ${layout.metaTextSize} rounded font-mono uppercase font-bold tracking-wider`}>
-                              {playingPesilat.kategori}
-                            </span>
-                            <span className="text-slate-600 font-mono text-[8px]">•</span>
-                            <span className={`bg-pink-500/10 text-pink-400 border border-pink-500/20 ${layout.metaTextSize} rounded font-mono uppercase font-bold tracking-wider`}>
-                              {playingPesilat.gender}
-                            </span>
-                            <span className="text-slate-600 font-mono text-[8px]">•</span>
-                            <span className={`bg-amber-400/10 text-amber-400 border border-amber-400/20 ${layout.metaTextSize} rounded font-mono uppercase font-bold tracking-wider`}>
-                              {playingPesilat.kelas}
-                            </span>
+                        {!layout.onlyShowParty && (
+                          <div className="bg-slate-950/80 border border-slate-850 p-2 sm:p-3 rounded-xl space-y-1.5 sm:space-y-2 shadow-inner min-h-0">
+                            
+                            {/* Metadata: Gender, Kategori & Kelas */}
+                            <div className="flex flex-wrap items-center justify-center gap-1 border-b border-slate-900 pb-1 text-center">
+                              <span className={`bg-indigo-500/10 text-indigo-400 border border-amber-600/20 ${layout.metaTextSize} rounded font-mono uppercase font-bold tracking-wider`}>
+                                {playingPesilat.kategori}
+                              </span>
+                              <span className="text-slate-600 font-mono text-[8px]">•</span>
+                              <span className={`bg-pink-500/10 text-pink-400 border border-pink-500/20 ${layout.metaTextSize} rounded font-mono uppercase font-bold tracking-wider`}>
+                                {playingPesilat.gender}
+                              </span>
+                              <span className="text-slate-600 font-mono text-[8px]">•</span>
+                              <span className={`bg-amber-400/10 text-amber-400 border border-amber-400/20 ${layout.metaTextSize} rounded font-mono uppercase font-bold tracking-wider`}>
+                                {playingPesilat.kelas}
+                              </span>
+                            </div>
+
+                            {playingPesilat.nama_pesilat_biru ? (
+                              /* KATEGORI TANDING: SUDUT BIRU (KIRI) vs SUDUT MERAH (KANAN) DENGAN TIMER DI TENGAH */
+                              <div className="grid grid-cols-12 gap-1 sm:gap-2 items-center">
+                                
+                                {/* Kiri: Sudut Biru */}
+                                <div className={`col-span-5 bg-blue-600/10 ${layout.competitorPadding} border-blue-600 rounded-r-lg min-w-0 shadow-md`}>
+                                  <span className="text-blue-400 font-mono text-[7px] sm:text-[9px] font-black uppercase tracking-widest block mb-0.5">
+                                    Biru
+                                  </span>
+                                  <h4 className={`${layout.competitorText} text-white uppercase truncate font-display leading-tight`}>
+                                    {playingPesilat.nama_pesilat_biru}
+                                  </h4>
+                                  <p className="text-[8px] sm:text-[10px] text-blue-200/80 font-bold mt-0.5 truncate uppercase tracking-wider font-mono">
+                                    {playingPesilat.kontingen_biru}
+                                  </p>
+                                </div>
+
+                                {/* Tengah: Timer */}
+                                <div className="col-span-2 flex flex-col items-center justify-center bg-slate-900 border border-slate-800 rounded-lg py-1 px-0.5 text-center min-w-[40px]">
+                                  <div className={`font-mono ${layout.timerText} font-black leading-none ${
+                                    playingPesilat.timer_seconds_left <= 10 && playingPesilat.timer_running
+                                      ? "text-red-500 animate-pulse drop-shadow-[0_0_4px_rgba(239,68,68,0.5)]"
+                                      : "text-emerald-400"
+                                  }`}>
+                                    {Math.floor(playingPesilat.timer_seconds_left / 60).toString().padStart(2, "0")}
+                                    :
+                                    {(playingPesilat.timer_seconds_left % 60).toString().padStart(2, "0")}
+                                  </div>
+                                  <span className="text-[5px] sm:text-[6px] text-slate-500 font-mono font-bold uppercase tracking-wider scale-90 mt-0.5">
+                                    {playingPesilat.timer_running ? "RUN" : "PAUSE"}
+                                  </span>
+                                </div>
+
+                                {/* Kanan: Sudut Merah */}
+                                <div className={`col-span-5 bg-red-600/10 ${layout.competitorPadding} border-red-600 rounded-l-lg min-w-0 text-right shadow-md`}>
+                                  <span className="text-red-400 font-mono text-[7px] sm:text-[9px] font-black uppercase tracking-widest block mb-0.5">
+                                    Merah
+                                  </span>
+                                  <h4 className={`${layout.competitorText} text-white uppercase truncate font-display leading-tight`}>
+                                    {playingPesilat.nama_pesilat}
+                                  </h4>
+                                  <p className="text-[8px] sm:text-[10px] text-red-200/80 font-bold mt-0.5 truncate uppercase tracking-wider font-mono">
+                                    {playingPesilat.kontingen}
+                                  </p>
+                                </div>
+                              </div>
+                            ) : (
+                              /* KATEGORI TUNGGAL/SENI/SOLO: ATLET UTAMA DENGAN TIMER DI KANAN */
+                              <div className="grid grid-cols-12 gap-1 sm:gap-2 items-center">
+                                
+                                {/* Kiri/Tengah: Detail Atlet */}
+                                <div className={`col-span-9 bg-indigo-600/10 ${layout.competitorPadding} border-amber-600 rounded-r-lg min-w-0 shadow-md`}>
+                                  <span className="text-indigo-400 font-mono text-[7px] sm:text-[9px] font-black uppercase tracking-widest block mb-0.5">
+                                    Pesilat Solo
+                                  </span>
+                                  <h4 className={`${layout.competitorText} text-white uppercase truncate font-display leading-tight`}>
+                                    {playingPesilat.nama_pesilat}
+                                  </h4>
+                                  <p className="text-[8px] sm:text-[10px] text-indigo-200/80 font-bold mt-0.5 truncate uppercase tracking-wider font-mono">
+                                    {playingPesilat.kontingen}
+                                  </p>
+                                </div>
+
+                                {/* Kanan: Timer */}
+                                <div className="col-span-3 flex flex-col items-center justify-center bg-slate-900 border border-slate-800 rounded-lg py-1 sm:py-2 px-1 text-center">
+                                  <div className={`font-mono ${layout.timerText} font-black leading-none ${
+                                    playingPesilat.timer_seconds_left <= 10 && playingPesilat.timer_running
+                                      ? "text-red-500 animate-pulse drop-shadow-[0_0_4px_rgba(239,68,68,0.5)]"
+                                      : "text-emerald-400"
+                                  }`}>
+                                    {Math.floor(playingPesilat.timer_seconds_left / 60).toString().padStart(2, "0")}
+                                    :
+                                    {(playingPesilat.timer_seconds_left % 60).toString().padStart(2, "0")}
+                                  </div>
+                                  <span className="text-[5px] sm:text-[7px] text-slate-500 font-mono font-bold uppercase tracking-wider mt-0.5">
+                                    {playingPesilat.timer_running ? "RUN" : "PAUSE"}
+                                  </span>
+                                </div>
+                              </div>
+                            )}
                           </div>
-
-                          {playingPesilat.nama_pesilat_biru ? (
-                            /* KATEGORI TANDING: SUDUT BIRU (KIRI) vs SUDUT MERAH (KANAN) DENGAN TIMER DI TENGAH */
-                            <div className="grid grid-cols-12 gap-1 sm:gap-2 items-center">
-                              
-                              {/* Kiri: Sudut Biru */}
-                              <div className={`col-span-5 bg-blue-600/10 ${layout.competitorPadding} border-blue-600 rounded-r-lg min-w-0 shadow-md`}>
-                                <span className="text-blue-400 font-mono text-[7px] sm:text-[9px] font-black uppercase tracking-widest block mb-0.5">
-                                  Biru
-                                </span>
-                                <h4 className={`${layout.competitorText} text-white uppercase truncate font-display leading-tight`}>
-                                  {playingPesilat.nama_pesilat_biru}
-                                </h4>
-                                <p className="text-[8px] sm:text-[10px] text-blue-200/80 font-bold mt-0.5 truncate uppercase tracking-wider font-mono">
-                                  {playingPesilat.kontingen_biru}
-                                </p>
-                              </div>
-
-                              {/* Tengah: Timer */}
-                              <div className="col-span-2 flex flex-col items-center justify-center bg-slate-900 border border-slate-800 rounded-lg py-1 px-0.5 text-center min-w-[40px]">
-                                <div className={`font-mono ${layout.timerText} font-black leading-none ${
-                                  playingPesilat.timer_seconds_left <= 10 && playingPesilat.timer_running
-                                    ? "text-red-500 animate-pulse drop-shadow-[0_0_4px_rgba(239,68,68,0.5)]"
-                                    : "text-emerald-400"
-                                }`}>
-                                  {Math.floor(playingPesilat.timer_seconds_left / 60).toString().padStart(2, "0")}
-                                  :
-                                  {(playingPesilat.timer_seconds_left % 60).toString().padStart(2, "0")}
-                                </div>
-                                <span className="text-[5px] sm:text-[6px] text-slate-500 font-mono font-bold uppercase tracking-wider scale-90 mt-0.5">
-                                  {playingPesilat.timer_running ? "RUN" : "PAUSE"}
-                                </span>
-                              </div>
-
-                              {/* Kanan: Sudut Merah */}
-                              <div className={`col-span-5 bg-red-600/10 ${layout.competitorPadding} border-red-600 rounded-l-lg min-w-0 text-right shadow-md`}>
-                                <span className="text-red-400 font-mono text-[7px] sm:text-[9px] font-black uppercase tracking-widest block mb-0.5">
-                                  Merah
-                                </span>
-                                <h4 className={`${layout.competitorText} text-white uppercase truncate font-display leading-tight`}>
-                                  {playingPesilat.nama_pesilat}
-                                </h4>
-                                <p className="text-[8px] sm:text-[10px] text-red-200/80 font-bold mt-0.5 truncate uppercase tracking-wider font-mono">
-                                  {playingPesilat.kontingen}
-                                </p>
-                              </div>
-
-                            </div>
-                          ) : (
-                            /* KATEGORI TUNGGAL/SENI/SOLO: ATLET UTAMA DENGAN TIMER DI KANAN */
-                            <div className="grid grid-cols-12 gap-1 sm:gap-2 items-center">
-                              
-                              {/* Kiri/Tengah: Detail Atlet */}
-                              <div className={`col-span-9 bg-indigo-600/10 ${layout.competitorPadding} border-indigo-500 rounded-r-lg min-w-0 shadow-md`}>
-                                <span className="text-indigo-400 font-mono text-[7px] sm:text-[9px] font-black uppercase tracking-widest block mb-0.5">
-                                  Pesilat Solo
-                                </span>
-                                <h4 className={`${layout.competitorText} text-white uppercase truncate font-display leading-tight`}>
-                                  {playingPesilat.nama_pesilat}
-                                </h4>
-                                <p className="text-[8px] sm:text-[10px] text-indigo-200/80 font-bold mt-0.5 truncate uppercase tracking-wider font-mono">
-                                  {playingPesilat.kontingen}
-                                </p>
-                              </div>
-
-                              {/* Kanan: Timer */}
-                              <div className="col-span-3 flex flex-col items-center justify-center bg-slate-900 border border-slate-800 rounded-lg py-1 sm:py-2 px-1 text-center">
-                                <div className={`font-mono ${layout.timerText} font-black leading-none ${
-                                  playingPesilat.timer_seconds_left <= 10 && playingPesilat.timer_running
-                                    ? "text-red-500 animate-pulse drop-shadow-[0_0_4px_rgba(239,68,68,0.5)]"
-                                    : "text-emerald-400"
-                                }`}>
-                                  {Math.floor(playingPesilat.timer_seconds_left / 60).toString().padStart(2, "0")}
-                                  :
-                                  {(playingPesilat.timer_seconds_left % 60).toString().padStart(2, "0")}
-                                </div>
-                                <span className="text-[5px] sm:text-[7px] text-slate-500 font-mono font-bold uppercase tracking-wider mt-0.5">
-                                  {playingPesilat.timer_running ? "RUN" : "PAUSE"}
-                                </span>
-                              </div>
-
-                            </div>
-                          )}
-
-                        </div>
-
+                        )}
                       </div>
                     )}
 
