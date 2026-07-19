@@ -354,7 +354,8 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
       // Ambil Jumlah Arena
       const arenaRes = await fetch("/api/pengaturan_arena");
       const arenaData = await arenaRes.json();
-      const count = arenaData && typeof arenaData.jumlah_arena === "number" ? arenaData.jumlah_arena : 3;
+      const arenaItem = Array.isArray(arenaData) ? arenaData[0] : arenaData;
+      const count = arenaItem && typeof arenaItem.jumlah_arena === "number" ? arenaItem.jumlah_arena : 3;
       setJumlahArena(count);
       setInputJumlahArena(count);
       if (!silent) setLoading(false);

@@ -185,7 +185,8 @@ export default function PublicDisplay() {
 
   const parseJumlahArena = (data: any): number => {
     if (!data) return 3;
-    const raw = typeof data === "object" ? data.jumlah_arena : data;
+    const item = Array.isArray(data) ? data[0] : data;
+    const raw = typeof item === "object" ? item.jumlah_arena : item;
     const parsed = Number(raw);
     if (!isNaN(parsed) && parsed >= 1 && parsed <= 12) {
       return parsed;
@@ -310,6 +311,7 @@ export default function PublicDisplay() {
   }, []);
 
   // 1.5. Monitor transisi partai tanding di setiap arena untuk membunyikan suara panggilan otomatis
+  const recentlyAnnounced = useRef<Record<string, number>>({});
   useEffect(() => {
     if (loading || error || pesilatList.length === 0) return;
 
@@ -325,8 +327,12 @@ export default function PublicDisplay() {
         // Ada partai baru yang mulai bermain di arenaNum!
         announcedIdsRef.current[arenaNum] = currentPlayingId;
         
-        // Panggil suara pengumuman
-        announceMatch(arenaNum, playingPesilat);
+        // Panggil suara pengumuman jika belum dipanggil dalam 30 detik terakhir (mencegah double call)
+        const lastTime = recentlyAnnounced.current[currentPlayingId] || 0;
+        if (Date.now() - lastTime > 30000) {
+          recentlyAnnounced.current[currentPlayingId] = Date.now();
+          announceMatch(arenaNum, playingPesilat);
+        }
       } else if (!currentPlayingId && prevPlayingId) {
         // Arena menjadi kosong/standby
         announcedIdsRef.current[arenaNum] = "";
