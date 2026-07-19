@@ -226,6 +226,31 @@ export default function PublicDisplay() {
     });
   }, [pesilatList]);
 
+  
+  // Polling announcements
+  useEffect(() => {
+    const interval = setInterval(async () => {
+      if (!isAudioEnabled) return;
+      try {
+        const res = await fetch(`/api/announce?_t=${Date.now()}`);
+        const data = await res.json();
+        if (Array.isArray(data) && data.length > 0) {
+          for (const ann of data) {
+            // check if already queued to avoid double
+            if (!speechQueueRef.current.some(item => item.pesilatId === ann.pesilatId)) {
+              speechQueueRef.current.push({ text: ann.text, arenaNum: ann.arenaNum, pesilatId: ann.pesilatId });
+              processQueue();
+            }
+            await fetch(`/api/announce/${ann.id}`, { method: "DELETE" });
+          }
+        }
+      } catch (err) {
+        console.error("Gagal memuat pengumuman:", err);
+      }
+    }, 2000);
+    return () => clearInterval(interval);
+  }, [isAudioEnabled]);
+
   // Local real-time timer countdown loop (smooth countdown syncing)
   useEffect(() => {
     const timer = setInterval(() => {
@@ -365,13 +390,7 @@ export default function PublicDisplay() {
               const oldP = prev.find(o => o.id === newP.id);
               if (oldP) {
                 const runningEqual = oldP.timer_running === newP.timer_running;
-                const timeDiff = Math.abs(oldP.timer_seconds_left - newP.timer_seconds_left);
-                if (runningEqual && timeDiff <= 1) {
-                  return {
-                    ...newP,
-                    timer_seconds_left: oldP.timer_seconds_left
-                  };
-                }
+                return newP;
               }
               return newP;
             });
@@ -400,13 +419,7 @@ export default function PublicDisplay() {
               const oldP = prev.find(o => o.id === newP.id);
               if (oldP) {
                 const runningEqual = oldP.timer_running === newP.timer_running;
-                const timeDiff = Math.abs(oldP.timer_seconds_left - newP.timer_seconds_left);
-                if (runningEqual && timeDiff <= 1) {
-                  return {
-                    ...newP,
-                    timer_seconds_left: oldP.timer_seconds_left // Pertahankan local smooth countdown
-                  };
-                }
+                return newP;
               }
               return newP;
             });

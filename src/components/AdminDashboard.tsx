@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { 
   Users, Settings, LogOut, Plus, Trash2, Edit2, ShieldAlert, CheckCircle, 
   UserPlus, RefreshCw, Layers, Award, UsersRound, HelpCircle, LayoutGrid,
-  Play, Pause, RotateCcw, Tv, Clock, Timer, FileSpreadsheet, Upload, Download
+  Play, Pause, RotateCcw, Tv, Clock, Timer, FileSpreadsheet, Upload, Download, Volume2
 } from "lucide-react";
 import * as XLSX from "xlsx";
 import { Pesilat, ConfigStatus } from "../types";
@@ -145,6 +145,37 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
     }
   };
 
+    const announceMatch = async (arenaNum: number, p: Pesilat) => {
+    const cleanKategori = p.kategori || "Tanding";
+    const cleanKelas = (p.kelas || "")
+      .replace(/kg/gi, " kilogram")
+      .replace(/\(/g, " ")
+      .replace(/\)/g, " ")
+      .replace(/-/g, " sampai ");
+    const cleanGender = p.gender || "Putra";
+    const cleanNamaMerah = p.nama_pesilat ? p.nama_pesilat.trim() : "";
+    const cleanKontingenMerah = p.kontingen ? p.kontingen.trim() : "";
+    const cleanNamaBiru = p.nama_pesilat_biru ? p.nama_pesilat_biru.trim() : "";
+    const cleanKontingenBiru = p.kontingen_biru ? p.kontingen_biru.trim() : "";
+
+    let text = "";
+    if (cleanNamaBiru !== "") {
+      text = `Panggilan kepada partai nomor ${p.nomor_partai || ""}, di Gelanggang ${arenaNum}. Kategori ${cleanKategori}, ${cleanGender}, ${cleanKelas}. Di sudut merah, ${cleanNamaMerah} dari ${cleanKontingenMerah}, melawan di sudut biru, ${cleanNamaBiru} dari ${cleanKontingenBiru}. Selamat bertanding.`;
+    } else {
+      text = `Panggilan kepada partai nomor ${p.nomor_partai || ""}, di Gelanggang ${arenaNum}. Kategori ${cleanKategori}, ${cleanGender}, ${cleanKelas}. Pesilat, ${cleanNamaMerah} dari ${cleanKontingenMerah}. Selamat bertanding.`;
+    }
+
+    try {
+      await fetch("/api/announce", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text, arenaNum, pesilatId: p.id })
+      });
+    } catch (err) {
+      console.error("Gagal mengirim pengumuman", err);
+    }
+  };
+
   // Form States - Arena Setting
   const [inputJumlahArena, setInputJumlahArena] = useState<number>(3);
 
@@ -227,6 +258,25 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
       }
     }
   };
+
+  
+  // Background polling to keep admin in sync with server timer
+  useEffect(() => {
+    const interval = setInterval(async () => {
+      try {
+        const res = await fetch(`/api/pesilat?_t=${Date.now()}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (Array.isArray(data)) {
+            setPesilatList(data);
+          }
+        }
+      } catch (e) {
+        // ignore
+      }
+    }, 1500);
+    return () => clearInterval(interval);
+  }, []);
 
   // Local real-time timer countdown loop (so countdown is buttery smooth on screen!)
   useEffect(() => {
@@ -1209,6 +1259,15 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                                   <RotateCcw className="w-3.5 h-3.5" />
                                 </button>
 
+                                {/* Panggil */}
+                                <button
+                                  onClick={() => announceMatch(arenaNum, activePesilat)}
+                                  className="p-1.5 bg-amber-500 hover:bg-amber-600 text-neutral-950 font-black border border-amber-400/50 rounded-lg transition cursor-pointer text-[10px] font-mono tracking-widest uppercase px-2.5 py-1 flex items-center gap-1"
+                                  title="Panggil Suara Pengumuman Atlit"
+                                >
+                                  <Volume2 className="w-3.5 h-3.5" />
+                                  <span className="hidden sm:inline">PANGGIL</span>
+                                </button>
                                 {/* Stop Display */}
                                 <button
                                   onClick={() => handleStopMatch(activePesilat.id)}
@@ -1485,6 +1544,14 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                                   <>
                                     {p.is_playing ? (
                                       <>
+                                        <button
+                                          onClick={() => announceMatch(p.arena, p)}
+                                          className="px-1 sm:px-2 py-0.5 sm:py-1 bg-amber-500 hover:bg-amber-600 text-neutral-950 font-black rounded-lg transition text-[9px] uppercase font-mono tracking-widest flex items-center gap-1 cursor-pointer shadow-lg shadow-amber-500/10 shrink-0"
+                                          title="Panggil Suara Pengumuman Atlit"
+                                        >
+                                          <Volume2 className="w-2.5 h-2.5" />
+                                          <span className="hidden sm:inline">PANGGIL</span>
+                                        </button>
                                         <button
                                           onClick={() => handleStopMatch(p.id)}
                                           className="px-1 sm:px-2 py-0.5 sm:py-1 bg-red-600 hover:bg-red-700 text-white font-black rounded-lg transition text-[9px] uppercase font-mono tracking-widest flex items-center gap-1 cursor-pointer shadow-lg shadow-red-600/10 animate-pulse shrink-0"

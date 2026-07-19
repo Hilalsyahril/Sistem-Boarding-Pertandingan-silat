@@ -277,7 +277,7 @@ app.put("/api/pesilat/:id/timer", async (req, res) => {
 
 app.put("/api/pesilat/:id/timeout", async (req, res) => {
   try {
-    await updatePesilat(req.params.id, { is_playing: false, timer_running: false });
+    await updatePesilat(req.params.id, { timer_running: false });
     res.json(await getPesilatById(req.params.id));
   } catch (error: any) { res.status(500).json({ error: error.message }); }
 });
@@ -338,6 +338,22 @@ app.post("/api/tts", async (req, res) => {
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }
+});
+
+let activeAnnouncements: any[] = [];
+
+app.post("/api/announce", (req, res) => {
+  activeAnnouncements.push({ id: Date.now().toString(), ...req.body });
+  res.json({ success: true });
+});
+
+app.get("/api/announce", (req, res) => {
+  res.json(activeAnnouncements);
+});
+
+app.delete("/api/announce/:id", (req, res) => {
+  activeAnnouncements = activeAnnouncements.filter(a => a.id !== req.params.id);
+  res.json({ success: true });
 });
 
 async function startServer() {
