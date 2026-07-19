@@ -949,13 +949,15 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
 
         {/* Database Mode Status */}
         <div className="hidden md:flex items-center gap-2 text-xs">
-          {config?.mode === "supabase" ? (
-            <span className="bg-emerald-500 text-white px-3 py-1.5 rounded-xl font-bold uppercase text-[10px] tracking-wider shadow">
-              Database: Cloud Supabase Active
+          {config?.configured ? (
+            <span className="bg-emerald-500 text-white px-3 py-1.5 rounded-xl font-bold uppercase text-[10px] tracking-wider shadow flex items-center gap-2">
+              <span className="w-1.5 h-1.5 bg-white rounded-full animate-pulse"></span>
+              Database: Live (Terhubung)
             </span>
           ) : (
-            <span className="bg-amber-500 text-slate-950 px-3 py-1.5 rounded-xl font-bold uppercase text-[10px] tracking-wider shadow">
-              Database: PostgreSQL LOKAL
+            <span className="bg-rose-600 text-white px-3 py-1.5 rounded-xl font-bold uppercase text-[10px] tracking-wider shadow flex items-center gap-2">
+              <span className="w-1.5 h-1.5 bg-white rounded-full"></span>
+              Database: Terputus
             </span>
           )}
         </div>

@@ -631,15 +631,15 @@ export default function PublicDisplay() {
 
           <div className="hidden md:block h-6 w-px bg-indigo-500/50"></div>
 
-          {config?.mode === "supabase" ? (
+          {config?.configured ? (
             <div className="bg-emerald-500 text-white px-2.5 py-1 rounded-lg flex items-center gap-1.5 shadow-lg font-bold text-[9px] sm:text-[10px] uppercase tracking-wider">
               <span className="w-1.5 h-1.5 bg-white rounded-full animate-pulse"></span>
-              <span>Supabase Live</span>
+              <span>Live</span>
             </div>
           ) : (
-            <div className="bg-amber-500 text-neutral-950 px-2.5 py-1 rounded-lg flex items-center gap-1.5 shadow-lg font-bold text-[9px] sm:text-[10px] uppercase tracking-wider">
-              <span className="w-1.5 h-1.5 bg-neutral-950 rounded-full animate-pulse"></span>
-              <span>PostgreSQL Live</span>
+            <div className="bg-rose-600 text-white px-2.5 py-1 rounded-lg flex items-center gap-1.5 shadow-lg font-bold text-[9px] sm:text-[10px] uppercase tracking-wider">
+              <span className="w-1.5 h-1.5 bg-white rounded-full"></span>
+              <span>Terputus</span>
             </div>
           )}
         </div>
