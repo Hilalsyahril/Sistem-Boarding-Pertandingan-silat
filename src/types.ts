@@ -22,5 +22,5 @@ export interface ConfigStatus {
   configured: boolean;
   supabaseUrl: string | null;
   supabaseAnonKey: string | null;
-  mode: "supabase" | "local_fallback";
+  mode: "supabase" | "local_fallback" | "postgres";
 }

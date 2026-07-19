@@ -955,7 +955,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
             </span>
           ) : (
             <span className="bg-amber-500 text-slate-950 px-3 py-1.5 rounded-xl font-bold uppercase text-[10px] tracking-wider shadow">
-              Database: Local In-Memory
+              Database: PostgreSQL LOKAL
             </span>
           )}
         </div>
@@ -976,9 +976,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
           <div className="mb-6 bg-amber-500/10 border border-amber-500/20 rounded-2xl p-4 flex items-start gap-3">
             <ShieldAlert className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
             <div className="text-xs sm:text-sm text-amber-200">
-              <span className="font-bold">Mode Simulasi Memori:</span> Berkas lingkungan `.env` Anda belum memiliki kunci 
-              Supabase valid. Server Express otomatis menyimpan data di memori server untuk kelancaran demo. 
-              Saat server dimulai kembali, data pesilat akan kembali ke kondisi default. Atur berkas `.env` untuk penyimpanan cloud nyata.
+              <span className="font-bold">Database Belum Terhubung:</span> Berkas lingkungan `.env` Anda belum memiliki pengaturan DATABASE_URL yang valid. Harap tambahkan DATABASE_URL PostgreSQL Anda (misalnya: postgres://user:pass@192.168.0.201:5432/dbname) di berkas .env untuk mengaktifkan penyimpanan data.
             </div>
           </div>
         )}

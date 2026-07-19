@@ -639,7 +639,7 @@ export default function PublicDisplay() {
           ) : (
             <div className="bg-amber-500 text-neutral-950 px-2.5 py-1 rounded-lg flex items-center gap-1.5 shadow-lg font-bold text-[9px] sm:text-[10px] uppercase tracking-wider">
               <span className="w-1.5 h-1.5 bg-neutral-950 rounded-full animate-pulse"></span>
-              <span>Simulated Live</span>
+              <span>PostgreSQL Live</span>
             </div>
           )}
         </div>
@@ -672,7 +672,7 @@ export default function PublicDisplay() {
         <div className="mb-1.5 sm:mb-2 bg-amber-500/10 border border-amber-500/20 rounded-xl p-2 flex items-start gap-2">
           <AlertCircle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
           <div className="text-[8px] sm:text-[10px] text-amber-200">
-            <span className="font-semibold">Info Demo:</span> Mode simulasi lokal aktif. Masukkan kunci Supabase Anda di panel pengaturan admin atau berkas `.env` untuk real-time cloud.
+            <span className="font-semibold">Database Belum Terhubung:</span> Sistem belum terhubung ke database PostgreSQL. Harap konfigurasi DATABASE_URL di berkas `.env`.
           </div>
         </div>
       )}
