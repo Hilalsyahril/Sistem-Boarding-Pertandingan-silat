@@ -20,51 +20,72 @@ export default function AdminLogin({ onLoginSuccess }: AdminLoginProps) {
 
   // Initialize default credentials
   useEffect(() => {
-    if (!localStorage.getItem("adminUsername")) {
-      localStorage.setItem("adminUsername", "operatorDB");
-    }
-    if (!localStorage.getItem("adminPassword")) {
-      localStorage.setItem("adminPassword", "silat2026");
-    }
+    // No longer using localStorage for credentials
   }, []);
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    const validUser = localStorage.getItem("adminUsername") || "operatorDB";
-    const validPass = localStorage.getItem("adminPassword") || "silat2026";
-    
-    if (username === validUser && password === validPass) {
-      setError(null);
-      onLoginSuccess();
-    } else {
-      setError("Username atau Password salah!");
+    setError(null);
+    try {
+      const res = await fetch("/api/admin/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username, password })
+      });
+      const data = await res.json();
+      if (data.success) {
+        localStorage.setItem("adminToken", data.token);
+        onLoginSuccess();
+      } else {
+        setError(data.error || "Username atau Password salah!");
+      }
+    } catch (err: any) {
+      setError("Koneksi ke server gagal.");
     }
   };
 
-  const handleEditPassword = (e: React.FormEvent) => {
+  const handleEditPassword = async (e: React.FormEvent) => {
     e.preventDefault();
-    const validUser = localStorage.getItem("adminUsername") || "operatorDB";
-    const validPass = localStorage.getItem("adminPassword") || "silat2026";
-    
-    if (username !== validUser || oldPassword !== validPass) {
-      setError("Username atau Password Lama salah!");
-      setSuccess(null);
-      return;
-    }
+    setError(null);
+    setSuccess(null);
     
     if (newPassword.length < 6) {
       setError("Password baru minimal 6 karakter!");
-      setSuccess(null);
       return;
     }
 
-    localStorage.setItem("adminPassword", newPassword);
-    setSuccess("Password berhasil diubah! Silakan login.");
-    setError(null);
-    setMode("login");
-    setPassword("");
-    setOldPassword("");
-    setNewPassword("");
+    try {
+      // First we need to login to get a token to change password
+      const loginRes = await fetch("/api/admin/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username, password: oldPassword })
+      });
+      const loginData = await loginRes.json();
+      
+      if (!loginData.success) {
+        setError("Username atau Password Lama salah!");
+        return;
+      }
+      
+      const res = await fetch("/api/admin/change-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token: loginData.token, oldPassword, newPassword })
+      });
+      const data = await res.json();
+      
+      if (data.success) {
+        setSuccess("Password berhasil diubah! Silakan login kembali.");
+        setOldPassword("");
+        setNewPassword("");
+        setTimeout(() => switchMode("login"), 2000);
+      } else {
+        setError(data.error || "Gagal mengubah password.");
+      }
+    } catch (err: any) {
+      setError("Koneksi ke server gagal.");
+    }
   };
 
   const switchMode = (newMode: "login" | "edit" | "forgot") => {

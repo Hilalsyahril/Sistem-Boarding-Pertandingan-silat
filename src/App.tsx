@@ -15,8 +15,32 @@ export default function App() {
     return "public";
   });
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
+  const [isCheckingAuth, setIsCheckingAuth] = useState<boolean>(true);
 
   useEffect(() => {
+    const checkAuth = async () => {
+      const token = localStorage.getItem("adminToken");
+      if (token) {
+        try {
+          const res = await fetch("/api/admin/verify", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ token })
+          });
+          const data = await res.json();
+          if (data.valid) {
+            setIsAuthenticated(true);
+          } else {
+            localStorage.removeItem("adminToken");
+          }
+        } catch (e) {
+          console.error("Auth check failed", e);
+        }
+      }
+      setIsCheckingAuth(false);
+    };
+    checkAuth();
+
     const handleLocationChange = () => {
       const path = window.location.pathname;
       const hash = window.location.hash;
@@ -44,10 +68,13 @@ export default function App() {
       </div>
 
       {view === "admin" && (
-        !isAuthenticated ? (
+        isCheckingAuth ? (
+          <div className="min-h-screen flex items-center justify-center text-white">Memeriksa sesi...</div>
+        ) : !isAuthenticated ? (
           <AdminLogin onLoginSuccess={() => setIsAuthenticated(true)} />
         ) : (
           <AdminDashboard onLogout={() => {
+            localStorage.removeItem("adminToken");
             setIsAuthenticated(false);
           }} />
         )

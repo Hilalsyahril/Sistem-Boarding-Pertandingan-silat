@@ -49,9 +49,21 @@ async function initDb() {
       timer_last_updated_at BIGINT,
       is_done BOOLEAN DEFAULT false
     );
+    CREATE TABLE IF NOT EXISTS admin_users (
+      id VARCHAR(255) PRIMARY KEY,
+      username VARCHAR(255) UNIQUE,
+      password VARCHAR(255),
+      token VARCHAR(255)
+    );
   `;
   await pgPool.query(schema);
   await pgPool.query(`INSERT INTO pengaturan_arena (id, jumlah_arena) VALUES ('00000000-0000-0000-0000-000000000001', 3) ON CONFLICT (id) DO NOTHING;`);
+  
+  // Seed default admin user
+  const adminCheck = await pgPool.query(`SELECT * FROM admin_users WHERE username = 'operatorDB'`);
+  if (adminCheck.rows.length === 0) {
+    await pgPool.query(`INSERT INTO admin_users (id, username, password) VALUES ('1', 'operatorDB', 'silat2026') ON CONFLICT (username) DO NOTHING;`);
+  }
 }
 
 // Convert SQLite integer booleans to true booleans
@@ -125,6 +137,53 @@ async function deleteAllPesilat() {
 }
 
 // API Endpoints
+// Admin Auth Endpoints
+app.post("/api/admin/login", async (req, res) => {
+  try {
+    const { username, password } = req.body;
+    if (!pgPool) return res.status(500).json({ error: "Database not connected" });
+    
+    const result = await pgPool.query("SELECT * FROM admin_users WHERE username = $1 AND password = $2", [username, password]);
+    if (result.rows.length > 0) {
+      const token = Date.now().toString() + Math.random().toString(36).substring(2);
+      await pgPool.query("UPDATE admin_users SET token = $1 WHERE id = $2", [token, result.rows[0].id]);
+      res.json({ success: true, token });
+    } else {
+      res.status(401).json({ error: "Username atau Password salah" });
+    }
+  } catch (error: any) { res.status(500).json({ error: error.message }); }
+});
+
+app.post("/api/admin/verify", async (req, res) => {
+  try {
+    const { token } = req.body;
+    if (!pgPool) return res.status(500).json({ error: "Database not connected" });
+    
+    if (!token) return res.status(401).json({ error: "No token" });
+    const result = await pgPool.query("SELECT * FROM admin_users WHERE token = $1", [token]);
+    if (result.rows.length > 0) {
+      res.json({ valid: true, username: result.rows[0].username });
+    } else {
+      res.status(401).json({ valid: false });
+    }
+  } catch (error: any) { res.status(500).json({ error: error.message }); }
+});
+
+app.post("/api/admin/change-password", async (req, res) => {
+  try {
+    const { token, oldPassword, newPassword } = req.body;
+    if (!pgPool) return res.status(500).json({ error: "Database not connected" });
+    
+    const result = await pgPool.query("SELECT * FROM admin_users WHERE token = $1 AND password = $2", [token, oldPassword]);
+    if (result.rows.length > 0) {
+      await pgPool.query("UPDATE admin_users SET password = $1 WHERE id = $2", [newPassword, result.rows[0].id]);
+      res.json({ success: true });
+    } else {
+      res.status(401).json({ error: "Password lama salah" });
+    }
+  } catch (error: any) { res.status(500).json({ error: error.message }); }
+});
+
 app.get("/api/config-status", (req, res) => {
   res.json({ configured: !!pgPool, supabaseUrl: null, supabaseAnonKey: null, mode: "postgres" });
 });
