@@ -69,12 +69,24 @@ async function initDb() {
 // Convert SQLite integer booleans to true booleans
 function mapPesilat(row: any) {
   if (!row) return null;
+  const is_playing = Boolean(row.is_playing);
+  const timer_running = Boolean(row.timer_running);
+  let timer_seconds_left = row.timer_seconds_left;
+  let timer_last_updated_at = row.timer_last_updated_at ? Number(row.timer_last_updated_at) : undefined;
+  
+  if (timer_running && timer_last_updated_at && timer_seconds_left > 0) {
+    const elapsed = Math.floor((Date.now() - timer_last_updated_at) / 1000);
+    timer_seconds_left = Math.max(0, timer_seconds_left - elapsed);
+    timer_last_updated_at = Date.now();
+  }
+
   return {
     ...row,
-    is_playing: Boolean(row.is_playing),
-    timer_running: Boolean(row.timer_running),
+    is_playing,
+    timer_running: timer_seconds_left > 0 ? timer_running : false,
+    timer_seconds_left,
     is_done: Boolean(row.is_done),
-    timer_last_updated_at: row.timer_last_updated_at ? Number(row.timer_last_updated_at) : undefined
+    timer_last_updated_at
   };
 }
 
@@ -254,7 +266,11 @@ app.put("/api/pesilat/:id/stop", async (req, res) => {
 
 app.put("/api/pesilat/:id/timer", async (req, res) => {
   try {
-    await updatePesilat(req.params.id, req.body);
+    const updateData = { ...req.body };
+    if (updateData.timer_running === true) {
+      updateData.timer_last_updated_at = Date.now();
+    }
+    await updatePesilat(req.params.id, updateData);
     res.json(await getPesilatById(req.params.id));
   } catch (error: any) { res.status(500).json({ error: error.message }); }
 });

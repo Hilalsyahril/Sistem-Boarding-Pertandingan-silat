@@ -1,11 +1,9 @@
 import React, { useState, useEffect, useRef } from "react";
 
-let globalAudioCtx: any = null;
 import { 
   Users, Settings, LogOut, Plus, Trash2, Edit2, ShieldAlert, CheckCircle, 
   UserPlus, RefreshCw, Layers, Award, UsersRound, HelpCircle, LayoutGrid,
-  Play, Pause, RotateCcw, Tv, Clock, Timer, FileSpreadsheet, Upload, Download,
-  Volume2, VolumeX
+  Play, Pause, RotateCcw, Tv, Clock, Timer, FileSpreadsheet, Upload, Download
 } from "lucide-react";
 import * as XLSX from "xlsx";
 import { Pesilat, ConfigStatus } from "../types";
@@ -73,9 +71,6 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
   const [isEditMode, setIsEditMode] = useState<boolean>(false);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const processedTimeoutsRef = useRef<Set<string>>(new Set());
-  const [isAudioEnabled, setIsAudioEnabled] = useState<boolean>(true);
-  const speechQueueRef = useRef<{ text: string; arenaNum: number; pesilatId: string }[]>([]);
-  const isSpeakingRef = useRef<boolean>(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<'all' | 'selected' | 'single' | null>(null);
   const [singleDeleteTarget, setSingleDeleteTarget] = useState<{ id: string, nama: string } | null>(null);
 
@@ -150,146 +145,6 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
     }
   };
 
-  // Process speech queue sequentially to prevent overlap and lockouts
-  const processQueue = async () => {
-    if (!isAudioEnabled) {
-      speechQueueRef.current = [];
-      isSpeakingRef.current = false;
-      return;
-    }
-    if (isSpeakingRef.current) return;
-    if (speechQueueRef.current.length === 0) return;
-
-    const current = speechQueueRef.current[0];
-    isSpeakingRef.current = true;
-
-    let isDone = false;
-    let safetyTimeout: any;
-
-    const finishUtterance = () => {
-      if (isDone) return;
-      isDone = true;
-      if (safetyTimeout) clearTimeout(safetyTimeout);
-      isSpeakingRef.current = false;
-      speechQueueRef.current.shift();
-      setTimeout(() => {
-        processQueue();
-      }, 1000);
-    };
-
-    try {
-      const res = await fetch("/api/tts", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: current.text })
-      });
-      if (!res.ok) throw new Error("TTS Backend failed");
-      const data = await res.json();
-      if (!data.audio) throw new Error("No audio returned");
-
-      if (!globalAudioCtx) {
-        const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
-        globalAudioCtx = new AudioContextClass();
-      }
-      if (globalAudioCtx.state === 'suspended') {
-        await globalAudioCtx.resume();
-      }
-      const audioCtx = globalAudioCtx;
-      
-      const binaryString = atob(data.audio);
-      const bytes = new Uint8Array(binaryString.length);
-      for (let i = 0; i < binaryString.length; i++) {
-        bytes[i] = binaryString.charCodeAt(i);
-      }
-      
-      // Decode MP3 audio data
-      const audioBuffer = await audioCtx.decodeAudioData(bytes.buffer);
-      
-      const source = audioCtx.createBufferSource();
-      source.buffer = audioBuffer;
-      source.connect(audioCtx.destination);
-      source.onended = () => {
-        finishUtterance();
-      };
-      
-      const durationMs = (audioBuffer.length / audioBuffer.sampleRate) * 1000;
-      safetyTimeout = setTimeout(() => finishUtterance(), durationMs + 2000);
-
-      source.start();
-
-    } catch (err) {
-      console.warn("High-quality TTS failed, falling back to browser synthesis:", err);
-      if (!("speechSynthesis" in window)) {
-        finishUtterance();
-        return;
-      }
-      
-      window.speechSynthesis.cancel();
-      const utterance = new SpeechSynthesisUtterance(current.text);
-      const voices = window.speechSynthesis.getVoices();
-      let idVoice = voices.find(v => (v.lang.includes("id") || v.lang.includes("ID")) && (v.name.includes("Natural") || v.name.includes("Online")));
-      if (!idVoice) idVoice = voices.find(v => (v.lang.includes("id") || v.lang.includes("ID")) && v.name.includes("Premium"));
-      if (!idVoice) idVoice = voices.find(v => (v.lang.includes("id") || v.lang.includes("ID")) && v.name.includes("Google"));
-      if (!idVoice) idVoice = voices.find(v => (v.lang.includes("id") || v.lang.includes("ID")));
-      if (idVoice) utterance.voice = idVoice;
-      utterance.lang = "id-ID";
-      utterance.rate = 0.82;
-      utterance.pitch = 0.95;
-
-      const charCount = current.text.length;
-      const estimatedDurationMs = Math.max(4000, (charCount * 80) + 2000);
-      safetyTimeout = setTimeout(() => {
-        finishUtterance();
-      }, estimatedDurationMs);
-
-      utterance.onend = finishUtterance;
-      utterance.onerror = finishUtterance;
-      
-      try {
-        window.speechSynthesis.speak(utterance);
-      } catch (e) {
-        finishUtterance();
-      }
-    }
-  };
-
-  const announceMatch = (arenaNum: number, p: Pesilat) => {
-    if (!isAudioEnabled) return;
-    if (!("speechSynthesis" in window)) {
-      console.warn("Speech Synthesis tidak didukung di browser ini.");
-      return;
-    }
-
-    const cleanKategori = p.kategori || "Tanding";
-    const cleanKelas = (p.kelas || "")
-      .replace(/kg/gi, " kilogram")
-      .replace(/\(/g, " ")
-      .replace(/\)/g, " ")
-      .replace(/-/g, " sampai ");
-    
-    const cleanGender = p.gender || "Putra";
-    const cleanNamaMerah = p.nama_pesilat ? p.nama_pesilat.trim() : "";
-    const cleanKontingenMerah = p.kontingen ? p.kontingen.trim() : "";
-    const cleanNamaBiru = p.nama_pesilat_biru ? p.nama_pesilat_biru.trim() : "";
-    const cleanKontingenBiru = p.kontingen_biru ? p.kontingen_biru.trim() : "";
-
-    let text = "";
-    if (cleanNamaBiru !== "") {
-      text = `Panggilan kepada partai nomor ${p.nomor_partai || ""}, di Gelanggang ${arenaNum}. Kategori ${cleanKategori}, ${cleanGender}, ${cleanKelas}. Di sudut merah, ${cleanNamaMerah} dari ${cleanKontingenMerah}, melawan di sudut biru, ${cleanNamaBiru} dari ${cleanKontingenBiru}. Selamat bertanding.`;
-    } else {
-      text = `Panggilan kepada partai nomor ${p.nomor_partai || ""}, di Gelanggang ${arenaNum}. Kategori ${cleanKategori}, ${cleanGender}, ${cleanKelas}. Pesilat, ${cleanNamaMerah} dari ${cleanKontingenMerah}. Selamat bertanding.`;
-    }
-
-    console.log("Enqueueing speech announcement:", text);
-
-    // Hindari double-enqueueing untuk partai yang sama persis di antrean
-    const isAlreadyQueued = speechQueueRef.current.some(item => item.pesilatId === p.id);
-    if (!isAlreadyQueued) {
-      speechQueueRef.current.push({ text, arenaNum, pesilatId: p.id });
-      processQueue();
-    }
-  };
-
   // Form States - Arena Setting
   const [inputJumlahArena, setInputJumlahArena] = useState<number>(3);
 
@@ -331,7 +186,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
 
   const fetchConfig = async (retriesLeft = 3, delayMs = 1500) => {
     try {
-      const res = await fetch("/api/config-status");
+      const res = await fetch(`/api/config-status?_t=${Date.now()}`);
       const data = await res.json();
       setConfig(data);
     } catch (err) {
@@ -347,12 +202,12 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
     try {
       if (!silent) setError(null);
       // Ambil Pesilat
-      const pesilatRes = await fetch("/api/pesilat");
+      const pesilatRes = await fetch(`/api/pesilat?_t=${Date.now()}`);
       const pesilatData = await pesilatRes.json();
       setPesilatList(Array.isArray(pesilatData) ? pesilatData : []);
 
       // Ambil Jumlah Arena
-      const arenaRes = await fetch("/api/pengaturan_arena");
+      const arenaRes = await fetch(`/api/pengaturan_arena?_t=${Date.now()}`);
       const arenaData = await arenaRes.json();
       const arenaItem = Array.isArray(arenaData) ? arenaData[0] : arenaData;
       const count = arenaItem && typeof arenaItem.jumlah_arena === "number" ? arenaItem.jumlah_arena : 3;
@@ -1356,15 +1211,6 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
 
                                 {/* Stop Display */}
                                 <button
-                                  onClick={() => announceMatch(arenaNum, activePesilat)}
-                                  className="p-1.5 bg-amber-500 hover:bg-amber-600 text-neutral-950 font-black border border-amber-400/50 rounded-lg transition cursor-pointer text-[10px] font-mono tracking-widest uppercase px-2.5 py-1 flex items-center gap-1"
-                                  title="Panggil Suara Pengumuman Atlit"
-                                >
-                                  <Volume2 className="w-3.5 h-3.5" />
-                                  <span>PANGGIL</span>
-                                </button>
-
-                                <button
                                   onClick={() => handleStopMatch(activePesilat.id)}
                                   className="p-1.5 bg-red-600/20 hover:bg-red-600/35 text-red-400 border border-red-600/30 rounded-lg transition cursor-pointer text-[10px] font-black font-mono tracking-widest uppercase px-2.5 py-1"
                                   title="Hentikan Display Monitor"
@@ -1639,14 +1485,6 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                                   <>
                                     {p.is_playing ? (
                                       <>
-                                        <button
-                                          onClick={() => announceMatch(p.arena, p)}
-                                          className="px-1 sm:px-2 py-0.5 sm:py-1 bg-amber-500 hover:bg-amber-600 text-neutral-950 font-black rounded-lg transition text-[9px] uppercase font-mono tracking-widest flex items-center gap-1 cursor-pointer shadow-lg shadow-amber-500/10 shrink-0"
-                                          title="Panggil Suara Pengumuman Atlit"
-                                        >
-                                          <Volume2 className="w-2.5 h-2.5" />
-                                          <span className="hidden sm:inline">PANGGIL</span>
-                                        </button>
                                         <button
                                           onClick={() => handleStopMatch(p.id)}
                                           className="px-1 sm:px-2 py-0.5 sm:py-1 bg-red-600 hover:bg-red-700 text-white font-black rounded-lg transition text-[9px] uppercase font-mono tracking-widest flex items-center gap-1 cursor-pointer shadow-lg shadow-red-600/10 animate-pulse shrink-0"

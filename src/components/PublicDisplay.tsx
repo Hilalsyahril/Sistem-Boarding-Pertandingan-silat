@@ -200,7 +200,7 @@ export default function PublicDisplay() {
     try {
       const res = await fetch(`/api/pesilat/${id}/timeout`, { method: "PUT" });
       if (res.ok) {
-        const pesilatRes = await fetch("/api/pesilat");
+        const pesilatRes = await fetch(`/api/pesilat?_t=${Date.now()}`);
         const pesilatData = await pesilatRes.json();
         if (Array.isArray(pesilatData)) {
           setPesilatList(pesilatData);
@@ -266,18 +266,18 @@ export default function PublicDisplay() {
       setError("");
       
       // Ambil konfigurasi Supabase dari backend
-      const configRes = await fetch("/api/config-status");
+      const configRes = await fetch(`/api/config-status?_t=${Date.now()}`);
       const configData: ConfigStatus = await configRes.json();
       setConfig(configData);
 
       // Ambil data jumlah arena awal
-      const arenaRes = await fetch("/api/pengaturan_arena");
+      const arenaRes = await fetch(`/api/pengaturan_arena?_t=${Date.now()}`);
       const arenaData = await arenaRes.json();
       const initialArenasCount = parseJumlahArena(arenaData);
       setJumlahArena(initialArenasCount);
 
       // Ambil data pesilat awal
-      const pesilatRes = await fetch("/api/pesilat");
+      const pesilatRes = await fetch(`/api/pesilat?_t=${Date.now()}`);
       const pesilatData = await pesilatRes.json();
       const initialPesilats = Array.isArray(pesilatData) ? pesilatData : [];
       setPesilatList(initialPesilats);
@@ -357,7 +357,7 @@ export default function PublicDisplay() {
     // Fungsi untuk mengambil pesilat terbaru (digunakan oleh real-time callback)
     async function fetchLatestPesilat() {
       try {
-        const res = await fetch("/api/pesilat");
+        const res = await fetch(`/api/pesilat?_t=${Date.now()}`);
         const data = await res.json();
         if (Array.isArray(data)) {
           setPesilatList(prev => {
@@ -387,8 +387,8 @@ export default function PublicDisplay() {
     async function fetchLatestDataFallback() {
       try {
         const [pesilatRes, arenaRes] = await Promise.all([
-          fetch("/api/pesilat"),
-          fetch("/api/pengaturan_arena")
+          fetch(`/api/pesilat?_t=${Date.now()}`),
+          fetch(`/api/pengaturan_arena?_t=${Date.now()}`)
         ]);
         const pesilatData = await pesilatRes.json();
         const arenaData = await arenaRes.json();
