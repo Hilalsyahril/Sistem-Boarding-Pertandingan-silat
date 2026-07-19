@@ -2,7 +2,7 @@ import express from "express";
 import path from "path";
 import dotenv from "dotenv";
 import { createServer as createViteServer } from "vite";
-import Database from "better-sqlite3";
+import { createClient } from "@supabase/supabase-js";
 
 // Load environment variables
 dotenv.config();
@@ -11,48 +11,28 @@ const app = express();
 app.use(express.json());
 
 const PORT = 3000;
-const supabaseActive = false;
-const supabaseUrl = null;
-const supabaseAnonKey = null;
 
+// Validate Supabase environment variables
+const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const supabaseAnonKey = process.env.SUPABASE_ANON_KEY;
 
-const db = new Database('local_fallback.db');
-db.pragma('journal_mode = WAL');
+// Smart verification: Supabase keys are always JWTs (starting with "ey" and containing ".")
+const isSupabaseConfigured = !!(
+  supabaseUrl &&
+  supabaseUrl !== "" &&
+  supabaseUrl.startsWith("https://") &&
+  !supabaseUrl.includes("your-supabase-project") &&
+  supabaseServiceKey &&
+  supabaseServiceKey !== "" &&
+  supabaseServiceKey.startsWith("ey") &&
+  supabaseServiceKey.includes(".") &&
+  !supabaseServiceKey.includes("your-service-role-key")
+);
 
-db.exec(`
-  CREATE TABLE IF NOT EXISTS pengaturan_arena (
-    id TEXT PRIMARY KEY,
-    jumlah_arena INTEGER DEFAULT 3
-  );
-
-  CREATE TABLE IF NOT EXISTS pesilat (
-    id TEXT PRIMARY KEY,
-    nomor_partai TEXT,
-    nama_pesilat TEXT,
-    kontingen TEXT,
-    nama_pesilat_biru TEXT,
-    kontingen_biru TEXT,
-    kelas TEXT,
-    kategori TEXT,
-    gender TEXT,
-    arena INTEGER,
-    is_playing INTEGER,
-    timer_duration INTEGER,
-    timer_seconds_left INTEGER,
-    timer_running INTEGER,
-    timer_last_updated_at REAL,
-    is_done INTEGER
-  );
-  
-  INSERT OR IGNORE INTO pengaturan_arena (id, jumlah_arena) VALUES ('00000000-0000-0000-0000-000000000001', 3);
-`);
+let supabaseActive = isSupabaseConfigured;
 
 console.log("=================================================");
-console.log("SISTEM BOARDING PENCAK SILAT - STARTING BACKEND");
-console.log(`Port: ${3000}`);
-console.log(`Database: 100% LOKAL (SQLite + In-Memory Sinkronisasi)`);
-console.log("=================================================");
-
 console.log("SISTEM BOARDING PENCAK SILAT - STARTING BACKEND");
 console.log(`Port: ${PORT}`);
 console.log(`Status Supabase: ${supabaseActive ? "TERHUBUNG (Real-time Cloud)" : "TIDAK TERKONFIGURASI (Menggunakan Memori Lokal Fallback)"}`);
@@ -61,6 +41,45 @@ if (!supabaseActive) {
 }
 console.log("=================================================");
 
+// Lazy loading Supabase client
+let supabase: any = null;
+function getSupabaseClient() {
+  if (!supabaseActive) return null;
+  if (!supabase) {
+    try {
+      supabase = createClient(supabaseUrl!, supabaseServiceKey!, {
+        auth: { persistSession: false }
+      });
+    } catch (e) {
+      console.warn("Gagal menginisialisasi client Supabase, beralih ke memori lokal:", e);
+      supabaseActive = false;
+      return null;
+    }
+  }
+  return supabase;
+}
+
+// Dynamic authentication or API key failure handling
+function handleSupabaseError(error: any, context: string) {
+  const isAuthError = 
+    error.status === 401 || 
+    error.status === 403 || 
+    error.code === "PGRST301" ||
+    (error.message && (
+      error.message.includes("Invalid API key") || 
+      error.message.includes("invalid API key") || 
+      error.message.includes("JWT") || 
+      error.message.includes("apiKey") ||
+      error.message.includes("Invalid key")
+    ));
+
+  if (isAuthError) {
+    console.warn(`[Supabase Auth Info] Kunci API tidak valid atau kedaluwarsa saat ${context}: ${error.message}. Mengalihkan secara dinamis ke mode memori lokal.`);
+    supabaseActive = false;
+  } else {
+    console.warn(`[Supabase Info] Gagal ${context}: ${error.message}`);
+  }
+}
 
 // In-Memory Data Store (Fallback jika Supabase belum dikonfigurasi)
 interface Pesilat {
@@ -98,13 +117,18 @@ let localJumlahArena = 3;
 
 // 1. Status Konfigurasi
 app.get("/api/config-status", (req, res) => {
-  res.json({ configured: true, supabaseUrl: null, supabaseAnonKey: null, mode: "local_fallback" });
+  res.json({
+    configured: supabaseActive,
+    supabaseUrl: supabaseActive ? supabaseUrl : null,
+    supabaseAnonKey: supabaseActive ? supabaseAnonKey : null, // Dibutuhkan frontend publik untuk subscribe real-time
+    mode: supabaseActive ? "supabase" : "local_fallback"
+  });
 });
 
 // 2. GET Semua Pesilat
 app.get("/api/pesilat", async (req, res) => {
   try {
-    const client = null;
+    const client = getSupabaseClient();
     let list: Pesilat[] = [];
     if (client) {
       const { data, error } = await client
@@ -112,7 +136,8 @@ app.get("/api/pesilat", async (req, res) => {
         .select("*");
 
       if (error) {
-                list = [...localPesilatList];
+        handleSupabaseError(error, "mengambil data pesilat");
+        list = [...localPesilatList];
       } else {
         list = data || [];
       }
@@ -197,7 +222,7 @@ app.post("/api/pesilat", async (req, res) => {
   const customDuration = Number(timer_duration) || defaultDuration;
 
   try {
-    const client = null;
+    const client = getSupabaseClient();
     if (client) {
       const { data, error } = await client
         .from("pesilat")
@@ -220,7 +245,8 @@ app.post("/api/pesilat", async (req, res) => {
         .single();
 
       if (error) {
-                const newPesilat: Pesilat = {
+        handleSupabaseError(error, "menyimpan pesilat");
+        const newPesilat: Pesilat = {
           id: Math.random().toString(36).substr(2, 9),
           nomor_partai: nomorPartaiStr,
           nama_pesilat,
@@ -332,7 +358,7 @@ app.post("/api/pesilat/batch", async (req, res) => {
   }
 
   try {
-    const client = null;
+    const client = getSupabaseClient();
     if (client) {
       const { data, error } = await client
         .from("pesilat")
@@ -340,7 +366,8 @@ app.post("/api/pesilat/batch", async (req, res) => {
         .select();
 
       if (error) {
-                // Fallback local memory
+        handleSupabaseError(error, "melakukan batch import pesilat");
+        // Fallback local memory
         const localItems = processedItems.map(p => ({
           ...p,
           id: Math.random().toString(36).substr(2, 9)
@@ -389,7 +416,7 @@ app.put("/api/pesilat/:id", async (req, res) => {
   const kontingenBiruStr = kontingen_biru || "";
 
   try {
-    const client = null;
+    const client = getSupabaseClient();
     if (client) {
       const updatePayload: any = {
         nama_pesilat,
@@ -416,7 +443,8 @@ app.put("/api/pesilat/:id", async (req, res) => {
         .single();
 
       if (error) {
-                const index = localPesilatList.findIndex(p => p.id === id);
+        handleSupabaseError(error, "mengupdate pesilat");
+        const index = localPesilatList.findIndex(p => p.id === id);
         if (index === -1) {
           return res.status(404).json({ error: "Pesilat tidak ditemukan." });
         }
@@ -505,7 +533,7 @@ app.put("/api/pesilat/:id/play", async (req, res) => {
   const { id } = req.params;
 
   try {
-    const client = null;
+    const client = getSupabaseClient();
     let allPesilats: Pesilat[] = [];
 
     if (client) {
@@ -568,7 +596,8 @@ app.put("/api/pesilat/:id/play", async (req, res) => {
       });
 
       if (error) {
-                return res.json(localPesilatList.find(p => p.id === id));
+        handleSupabaseError(error, "mengaktifkan play pesilat");
+        return res.json(localPesilatList.find(p => p.id === id));
       }
       return res.json(data ? (Array.isArray(data) ? data[0] : data) : localPesilatList.find(p => p.id === id));
     } else {
@@ -615,7 +644,7 @@ app.put("/api/pesilat/:id/stop", async (req, res) => {
       localPesilatList[index].timer_running = false;
     }
 
-    const client = null;
+    const client = getSupabaseClient();
     if (client) {
       const { data, error } = await client
         .from("pesilat")
@@ -625,7 +654,8 @@ app.put("/api/pesilat/:id/stop", async (req, res) => {
         .single();
 
       if (error) {
-                return res.json(localPesilatList[index]);
+        handleSupabaseError(error, "menghentikan play pesilat");
+        return res.json(localPesilatList[index]);
       }
       return res.json(data);
     } else {
@@ -660,7 +690,7 @@ app.put("/api/pesilat/:id/timer", async (req, res) => {
       }
     }
 
-    const client = null;
+    const client = getSupabaseClient();
     if (client) {
       const updateData: any = {};
       if (typeof timer_duration === "number") updateData.timer_duration = timer_duration;
@@ -680,7 +710,8 @@ app.put("/api/pesilat/:id/timer", async (req, res) => {
       const { data, error } = await updatePesilatSafely(client, id, updateData);
 
       if (error) {
-                return res.json(localPesilatList[index]);
+        handleSupabaseError(error, "mengupdate timer");
+        return res.json(localPesilatList[index]);
       }
       return res.json(data ? (Array.isArray(data) ? data[0] : data) : localPesilatList[index]);
     } else {
@@ -698,7 +729,7 @@ app.put("/api/pesilat/:id/timeout", async (req, res) => {
 
   try {
     let allPesilats: Pesilat[] = [];
-    const client = null;
+    const client = getSupabaseClient();
 
     if (client) {
       const { data: fetchAll, error: fetchErr } = await client
@@ -828,7 +859,7 @@ app.delete("/api/pesilat/:id", async (req, res) => {
   const { id } = req.params;
 
   try {
-    const client = null;
+    const client = getSupabaseClient();
     if (client) {
       const { error } = await client
         .from("pesilat")
@@ -836,7 +867,8 @@ app.delete("/api/pesilat/:id", async (req, res) => {
         .eq("id", id);
 
       if (error) {
-                const index = localPesilatList.findIndex(p => p.id === id);
+        handleSupabaseError(error, "menghapus pesilat");
+        const index = localPesilatList.findIndex(p => p.id === id);
         if (index !== -1) {
           localPesilatList.splice(index, 1);
         }
@@ -865,7 +897,7 @@ app.delete("/api/pesilat/:id", async (req, res) => {
 // 5a. DELETE All Pesilat (Hapus Semua)
 app.delete("/api/pesilat", async (req, res) => {
   try {
-    const client = null;
+    const client = getSupabaseClient();
     if (client) {
       const { error } = await client
         .from("pesilat")
@@ -873,7 +905,8 @@ app.delete("/api/pesilat", async (req, res) => {
         .neq("id", "00000000-0000-0000-0000-000000000000");
 
       if (error) {
-                localPesilatList.length = 0;
+        handleSupabaseError(error, "menghapus semua pesilat");
+        localPesilatList.length = 0;
         return res.json({ message: "Semua pesilat berhasil dihapus dari memori." });
       }
       localPesilatList.length = 0;
@@ -897,7 +930,7 @@ app.post("/api/pesilat/delete-batch", async (req, res) => {
   }
 
   try {
-    const client = null;
+    const client = getSupabaseClient();
     if (client) {
       const { error } = await client
         .from("pesilat")
@@ -905,7 +938,8 @@ app.post("/api/pesilat/delete-batch", async (req, res) => {
         .in("id", ids);
 
       if (error) {
-                ids.forEach(id => {
+        handleSupabaseError(error, "menghapus batch pesilat");
+        ids.forEach(id => {
           const index = localPesilatList.findIndex(p => p.id === id);
           if (index !== -1) localPesilatList.splice(index, 1);
         });
@@ -932,7 +966,7 @@ app.post("/api/pesilat/delete-batch", async (req, res) => {
 // 6. GET Pengaturan Arena
 app.get("/api/pengaturan_arena", async (req, res) => {
   try {
-    const client = null;
+    const client = getSupabaseClient();
     if (client) {
       const { data, error } = await client
         .from("pengaturan_arena")
@@ -941,7 +975,8 @@ app.get("/api/pengaturan_arena", async (req, res) => {
         .maybeSingle();
 
       if (error) {
-                return res.json({ jumlah_arena: localJumlahArena });
+        handleSupabaseError(error, "mengambil pengaturan arena");
+        return res.json({ jumlah_arena: localJumlahArena });
       }
       if (!data) {
         // Jika belum ada row, kembalikan default localJumlahArena
@@ -975,7 +1010,7 @@ app.put("/api/pengaturan_arena", async (req, res) => {
   localJumlahArena = numArena;
 
   try {
-    const client = null;
+    const client = getSupabaseClient();
     if (client) {
       const { data, error } = await client
         .from("pengaturan_arena")
@@ -988,7 +1023,8 @@ app.put("/api/pengaturan_arena", async (req, res) => {
         .single();
 
       if (error) {
-                return res.json({ id: "00000000-0000-0000-0000-000000000001", jumlah_arena: localJumlahArena });
+        handleSupabaseError(error, "mengupdate pengaturan arena");
+        return res.json({ id: "00000000-0000-0000-0000-000000000001", jumlah_arena: localJumlahArena });
       }
       return res.json(data);
     } else {

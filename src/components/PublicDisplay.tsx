@@ -1,7 +1,6 @@
 import React, { useEffect, useState, useRef } from "react";
 
 let globalAudioCtx: any = null;
-import { createClient } from "@supabase/supabase-js";
 import { Shield, Users, Award, Zap, AlertCircle, RefreshCw, Trophy, Volume2, VolumeX } from "lucide-react";
 import { Pesilat, ConfigStatus } from "../types";
 
@@ -339,56 +338,8 @@ export default function PublicDisplay() {
   useEffect(() => {
     if (!config) return;
 
-    let supabaseClient: any = null;
-    let arenaSubscription: any = null;
-    let pesilatSubscription: any = null;
+    // --- LOCAL POLLING ---
     let fallbackInterval: any = null;
-
-    // --- INTEGRASI SUPABASE REAL-TIME ---
-    if (config.configured && config.supabaseUrl && config.supabaseAnonKey) {
-      console.log("Supabase terkonfigurasi. Memulai listener Real-time client-side...");
-      try {
-        supabaseClient = createClient(config.supabaseUrl, config.supabaseAnonKey);
-
-        // Mendengarkan perubahan di tabel 'pengaturan_arena'
-        arenaSubscription = supabaseClient
-          .channel("realtime-arena")
-          .on(
-            "postgres_changes",
-            { event: "*", schema: "public", table: "pengaturan_arena" },
-            (payload: any) => {
-              console.log("Menerima update pengaturan_arena Real-time:", payload);
-              if (payload.new) {
-                setJumlahArena(parseJumlahArena(payload.new));
-                setLastUpdated(new Date());
-              }
-            }
-          )
-          .subscribe((status: string) => {
-            console.log("Status subscription arena:", status);
-          });
-
-        // Mendengarkan perubahan di tabel 'pesilat'
-        pesilatSubscription = supabaseClient
-          .channel("realtime-pesilat")
-          .on(
-            "postgres_changes",
-            { event: "*", schema: "public", table: "pesilat" },
-            () => {
-              console.log("Menerima update tabel pesilat Real-time. Mengambil ulang data...");
-              fetchLatestPesilat();
-            }
-          )
-          .subscribe((status: string) => {
-            console.log("Status subscription pesilat:", status);
-          });
-
-      } catch (err) {
-        console.error("Gagal membuat koneksi real-time Supabase:", err);
-      }
-    }
-
-    // --- FAILSAFE BACKUP POLLING ---
     // Kami selalu menjalankan polling ini secara berkala (setiap 3 detik) sebagai backup/failsafe.
     // Jika real-time Supabase gagal, mati, terputus, atau replication tidak diaktifkan pada tabel di Supabase Dashboard,
     // data pada display publik akan tetap ter-update secara otomatis secara berkala!
@@ -465,12 +416,8 @@ export default function PublicDisplay() {
 
     // Cleanup subscription/interval saat komponen unmount
     return () => {
-      if (arenaSubscription) {
-        supabaseClient.removeChannel(arenaSubscription);
-      }
-      if (pesilatSubscription) {
-        supabaseClient.removeChannel(pesilatSubscription);
-      }
+      
+      
       if (fallbackInterval) {
         clearInterval(fallbackInterval);
       }
