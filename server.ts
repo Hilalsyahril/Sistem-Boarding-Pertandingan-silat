@@ -281,14 +281,21 @@ app.put("/api/pesilat/:id/timeout", async (req, res) => {
     const p = await getPesilatById(id);
     if (!p) return res.status(404).json({ error: "Not found" });
 
+    if (!p.is_playing) {
+      return res.json(p);
+    }
+
     await updatePesilat(id, { is_playing: false, timer_running: false, is_done: true, timer_seconds_left: 0 });
 
     const all = await getPesilats();
     const arenaMatches = all.filter(match => match.arena === p.arena);
     const currentIndex = arenaMatches.findIndex(match => match.id === id);
-    if (currentIndex !== -1 && currentIndex + 1 < arenaMatches.length) {
-      const nextMatch = arenaMatches[currentIndex + 1];
-      await updatePesilat(nextMatch.id, { is_playing: true, timer_running: true, is_done: false, timer_seconds_left: nextMatch.timer_seconds_left || nextMatch.timer_duration || 180 });
+    if (currentIndex !== -1) {
+      // Find the first match in the same arena after the current one that is not done and not playing
+      const nextMatch = arenaMatches.slice(currentIndex + 1).find(m => !m.is_done && !m.is_playing);
+      if (nextMatch) {
+        await updatePesilat(nextMatch.id, { is_playing: true, timer_running: true, timer_last_updated_at: Date.now(), is_done: false, timer_seconds_left: nextMatch.timer_seconds_left || nextMatch.timer_duration || 180 });
+      }
     }
 
     res.json(await getPesilatById(id));
@@ -336,34 +343,20 @@ app.post("/api/tts", async (req, res) => {
     const { text } = req.body;
     if (!text) return res.status(400).json({ error: "Text is required" });
 
-    // Split text into chunks of ~150 chars to avoid Google TTS limit (200)
-    const words = text.split(' ');
-    const chunks = [];
-    let currentChunk = '';
+    const url = "https://tiktok-tts.weilnet.workers.dev/api/generation";
+    const ttsRes = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        text: text,
+        voice: "id_001"
+      })
+    });
     
-    for (const word of words) {
-      if ((currentChunk + word).length > 150) {
-        chunks.push(currentChunk.trim());
-        currentChunk = word + ' ';
-      } else {
-        currentChunk += word + ' ';
-      }
-    }
-    if (currentChunk.trim().length > 0) chunks.push(currentChunk.trim());
-
-    const audioBuffers = [];
-    for (const chunk of chunks) {
-      const url = `https://translate.google.com/translate_tts?ie=UTF-8&q=${encodeURIComponent(chunk)}&tl=id&client=tw-ob`;
-      const ttsRes = await fetch(url);
-      if (!ttsRes.ok) throw new Error("Google TTS failed for chunk: " + chunk);
-      const arrayBuffer = await ttsRes.arrayBuffer();
-      audioBuffers.push(Buffer.from(arrayBuffer));
-    }
+    const data = await ttsRes.json();
+    if (!data.success) throw new Error("TikTok TTS failed: " + data.error);
     
-    // Simple MP3 concatenation by joining buffers (works for basic playback in AudioContext)
-    const combinedBuffer = Buffer.concat(audioBuffers);
-    const base64 = combinedBuffer.toString('base64');
-    res.json({ audio: base64 });
+    res.json({ audio: data.data });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }
