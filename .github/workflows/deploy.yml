@@ -1,36 +1,41 @@
-name: Deploy ke Hosting Apache
+name: Deploy Node.js App via FTP
 
 on:
   push:
     branches:
-      - main # Akan berjalan otomatis setiap ada push ke branch main
+      - main # Script berjalan otomatis saat ada push ke branch 'main'
 
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
+
     steps:
-    # 1. Mengambil kode terbaru dari GitHub
     - name: Checkout Code
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
 
-    # 2. Menyiapkan environment Node.js
     - name: Setup Node.js
-      uses: actions/setup-node@v3
+      uses: actions/setup-node@v4
       with:
-        node-version: '18'
+        node-version: '16.20.2'
 
-    # 3. Menginstal library & mem-build aplikasi React
-    - name: Install & Build
+    - name: Install Dependencies
+      run: npm install
+
+    - name: Build App
+      run: npm run build
+
+    - name: Prepare Deployment Folder
       run: |
-        npm install
-        npm run build
+        mkdir deploy_folder
+        cp -r dist/* deploy_folder/
+        cp package.json deploy_folder/
+        cp package-lock.json deploy_folder/
 
-    # 4. Mengirimkan folder hasil build (dist) ke hosting
-    - name: Deploy via FTP
-      uses: SamKirkland/FTP-Deploy-Action@v4.3.4
+    - name: Sync files via FTP
+      uses: SamKirkland/FTP-Deploy-Action@v4.3.5
       with:
         server: ${{ secrets.FTP_SERVER }}
         username: ${{ secrets.FTP_USERNAME }}
         password: ${{ secrets.FTP_PASSWORD }}
-        local-dir: ./dist/ # Hanya mengupload folder web statis
-        server-dir: /public_html/ # Sesuaikan dengan folder root website Anda (contoh: /htdocs/ atau /public_html/)
+        local-dir: ./deploy_folder/
+        server-dir: /app-boardingsilat/ # PENTING: Ubah sesuai dengan nama "Application Root" di Langkah 2
