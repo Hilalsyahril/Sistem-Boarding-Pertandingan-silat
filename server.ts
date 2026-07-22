@@ -1,5 +1,6 @@
 
 import express from "express";
+import fs from "fs";
 import path from "path";
 import dotenv from "dotenv";
 import mysql from "mysql2/promise";
@@ -427,7 +428,8 @@ async function startServer() {
     console.error("Failed to initialize database:", err);
   }
   
-  if (process.env.NODE_ENV !== "production") {
+  const isProd = process.env.NODE_ENV === "production" || fs.existsSync(path.join(typeof __dirname !== "undefined" ? __dirname : process.cwd(), "index.html"));
+  if (!isProd) {
     const { createServer: createViteServer } = await import("vite");
     const vite = await createViteServer({ server: { middlewareMode: true }, appType: "spa" });
     app.use(vite.middlewares);
@@ -442,7 +444,7 @@ async function startServer() {
     app.use('/assets', express.static(path.join(rootPath, 'dist', 'assets')));
     
     app.get("/api/debug-paths", (req, res) => {
-      const fs = require('fs');
+      
       res.json({
         __dirname: typeof __dirname !== "undefined" ? __dirname : "undefined",
         cwd: process.cwd(),
@@ -456,9 +458,10 @@ async function startServer() {
     app.get("*", (req, res) => res.sendFile(path.join(distPath, "index.html")));
   }
 
-  app.listen(PORT as number, "0.0.0.0", () => {
-    console.log(`Server running at http://0.0.0.0:${PORT}`);
-  });
 }
+
+app.listen(PORT as number, "0.0.0.0", () => {
+  console.log(`Server running at http://0.0.0.0:${PORT}`);
+});
 
 startServer();
