@@ -27,8 +27,8 @@ jobs:
     - name: Prepare Deployment
       run: |
         mkdir deploy_folder
-        # Salin folder hasil build (dist) yang berisi UI & Server
-        cp -r dist deploy_folder/
+        # Salin ISI folder hasil build (dist) yang berisi UI & Server
+        cp -r dist/* deploy_folder/
         
         # Buat package.json khusus production untuk cPanel
         cat << 'PKG' > deploy_folder/package.json
@@ -43,8 +43,8 @@ jobs:
         }
         PKG
         
-        # Gunakan app.cjs sebagai app.js (Entry point cPanel)
-        echo "require('./dist/server.cjs');" > deploy_folder/app.js
+        # Gunakan server.cjs sebagai app.js (Entry point cPanel)
+        echo "require('./server.cjs');" > deploy_folder/app.js
 
     - name: Deploy to FTP
       uses: SamKirkland/FTP-Deploy-Action@v4.3.5
