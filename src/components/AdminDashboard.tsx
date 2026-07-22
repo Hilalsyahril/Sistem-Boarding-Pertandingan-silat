@@ -852,11 +852,6 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
       {/* Top Navbar */}
       <nav className="bg-indigo-700 px-4 py-4 sm:px-6 flex items-center justify-between shadow-xl border-b-4 border-indigo-500">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-white rounded-full flex items-center justify-center shrink-0 shadow-lg">
-            <div className="w-6 h-6 bg-indigo-700 rotate-45 flex items-center justify-center">
-              <span className="text-white font-bold -rotate-45 text-[10px]">IPS</span>
-            </div>
-          </div>
           <div>
             <h1 className="text-sm sm:text-base font-black font-display uppercase tracking-wider text-white">
               PANEL ADMIN <span className="text-amber-300 font-black">BOARDING</span>

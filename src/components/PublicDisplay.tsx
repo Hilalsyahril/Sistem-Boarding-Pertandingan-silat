@@ -644,11 +644,6 @@ export default function PublicDisplay() {
       {/* HEADER UTAMA - VIBRANT PALETTE INDIGO HEADER WITH WHITE ROTATING LOGO */}
       <header className="bg-gradient-to-br from-yellow-400 via-amber-500 to-red-600 p-2.5 sm:p-3 rounded-2xl flex flex-col md:flex-row md:items-center md:justify-between border-b-2 sm:border-b-4 border-amber-600 shadow-xl mb-1.5 sm:mb-2.5 gap-2">
         <div className="flex items-center gap-3">
-          <div className="w-9 h-9 bg-white rounded-full flex items-center justify-center shrink-0 shadow-lg">
-            <div className="w-6 h-6 bg-red-600 rotate-45 flex items-center justify-center">
-              <span className="text-white font-bold -rotate-45 text-[10px]">IPS</span>
-            </div>
-          </div>
           <div>
             <h1 className="text-sm sm:text-base md:text-lg font-black tracking-tight uppercase text-white font-display">
               SISTEM BOARDING <span className="text-white">PENCAK SILAT</span>
@@ -714,7 +709,6 @@ export default function PublicDisplay() {
       {!hasInteracted && (
         <div className="bg-amber-400 text-neutral-900 px-4 py-3 rounded-xl mb-2 flex items-center justify-between border-2 border-amber-500 shadow-[0_0_15px_rgba(251,191,36,0.3)] animate-pulse">
           <div className="flex items-center gap-3">
-            <Volume2 className="w-5 h-5 sm:w-6 sm:h-6" />
             <div>
               <h3 className="font-bold text-sm sm:text-base">Aktivasi Panggilan Suara Diperlukan</h3>
               <p className="text-[10px] sm:text-xs font-medium">Browser memblokir pemutaran suara otomatis. Klik tombol di samping untuk mengaktifkan.</p>
@@ -1001,7 +995,7 @@ export default function PublicDisplay() {
       {/* FOOTER INFORMASI BAWAH */}
       <footer className="mt-2 border-t border-slate-850 pt-2 flex flex-row items-center justify-between text-[9px] text-slate-600 font-mono py-1">
         <div>
-          &copy; {new Date().getFullYear()} IPSI.
+          Hilalsyahril@Copyright2026
         </div>
         <div className="flex items-center gap-2">
           <span>Boarding v1.0.0</span>

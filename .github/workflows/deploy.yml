@@ -3,7 +3,7 @@ name: Deploy to cPanel via FTP
 on:
   push:
     branches:
-      - main # Ubah ke 'master' jika branch utama Anda bernama master
+      - main # Ubah ke 'master' jika branch utama bernama master
 
 jobs:
   build-and-deploy:
@@ -16,13 +16,26 @@ jobs:
     - name: Setup Node.js
       uses: actions/setup-node@v4
       with:
-        node-version: '16'
+        node-version: '18'
 
     - name: Install Dependencies
-      run: npm install
+      run: |
+        rm -rf package-lock.json node_modules
+        npm install
 
     - name: Build Application
       run: npm run build
+
+    - name: Prepare Deployment
+      run: |
+        mkdir deploy_folder
+        # Salin folder hasil build (dist) yang berisi UI & Server
+        cp -r dist deploy_folder/
+        # Salin file package.json untuk dependensi server (mysql2, dll)
+        cp package.json deploy_folder/
+        # Salin file entry point untuk cPanel
+        cp app.cjs deploy_folder/
+        cp app.js deploy_folder/ 2>/dev/null || true
 
     - name: Deploy to FTP
       uses: SamKirkland/FTP-Deploy-Action@v4.3.5
@@ -30,16 +43,5 @@ jobs:
         server: ${{ secrets.FTP_SERVER }}
         username: ${{ secrets.FTP_USERNAME }}
         password: ${{ secrets.FTP_PASSWORD }}
-        # Jika menggunakan akun FTP utama, pathnya biasanya seperti di bawah ini:
-        server-dir: /domains/boardingsilat.mra.my.id/public_html/ 
-        # Jika menggunakan akun FTP khusus domain, ubah menjadi server-dir: /public_html/ atau server-dir: /
-        exclude: |
-          **/.git*
-          **/.git*/**
-          node_modules/**
-          src/**
-          server.ts
-          README.md
-          tsconfig.json
-          vite.config.ts
-          .env.example
+        server-dir: /domains/boardingsilat.mra.my.id/public_html/
+        local-dir: ./deploy_folder/
