@@ -519,6 +519,7 @@ export default function PublicDisplay() {
         cardPadding: "p-4 sm:p-5 gap-3 sm:gap-4",
         headerPadding: "p-3 sm:p-4",
         headerTitle: "text-2xl sm:text-3xl md:text-4xl",
+        headerSubtitle: "text-base sm:text-lg md:text-xl",
         partySize: "text-[9rem] sm:text-[11rem] md:text-[13rem] lg:text-[16rem]",
         metaTextSize: "text-xs sm:text-sm px-2.5 py-1",
         competitorText: "text-base sm:text-lg md:text-xl font-bold",
@@ -538,6 +539,7 @@ export default function PublicDisplay() {
         cardPadding: "p-3 sm:p-4 gap-2.5 sm:gap-3",
         headerPadding: "p-2.5 sm:p-3",
         headerTitle: "text-xl sm:text-2xl md:text-3xl",
+        headerSubtitle: "text-sm sm:text-base md:text-lg",
         partySize: "text-[7rem] sm:text-[8.5rem] md:text-[10rem] lg:text-[12rem]",
         metaTextSize: "text-[10px] sm:text-xs px-2 py-0.5",
         competitorText: "text-sm sm:text-base md:text-lg",
@@ -557,6 +559,7 @@ export default function PublicDisplay() {
         cardPadding: "p-2 sm:p-3 gap-2",
         headerPadding: "p-2 sm:p-2.5",
         headerTitle: "text-lg sm:text-xl md:text-2xl",
+        headerSubtitle: "text-xs sm:text-sm md:text-base",
         partySize: "text-[5.5rem] sm:text-[6.5rem] md:text-[7.5rem] lg:text-[8.5rem]",
         metaTextSize: "text-[9px] sm:text-[10px] px-1.5 py-0.5",
         competitorText: "text-xs sm:text-sm md:text-base",
@@ -576,6 +579,7 @@ export default function PublicDisplay() {
         cardPadding: "p-2 gap-1.5 sm:gap-2",
         headerPadding: "p-1.5 sm:p-2",
         headerTitle: "text-sm sm:text-base md:text-lg",
+        headerSubtitle: "text-[10px] sm:text-xs md:text-sm",
         partySize: "text-[4.5rem] sm:text-[5rem] md:text-[6rem] lg:text-[6.5rem]",
         metaTextSize: "text-[8px] sm:text-[9px] px-1 py-0.5",
         competitorText: "text-[10px] sm:text-xs md:text-sm",
@@ -599,6 +603,7 @@ export default function PublicDisplay() {
         cardPadding: "p-2 gap-1",
         headerPadding: "p-1",
         headerTitle: "text-xs sm:text-sm",
+        headerSubtitle: "text-[9px] sm:text-[10px]",
         partySize: "text-[4rem] sm:text-[5.5rem] md:text-[7rem]", // Make it proportional to fit
         metaTextSize: "text-[8px] px-1 py-0.25",
         competitorText: "text-[9px]",
@@ -618,6 +623,7 @@ export default function PublicDisplay() {
       cardPadding: "p-1.5 gap-1",
       headerPadding: "p-1 sm:p-1.5",
       headerTitle: "text-xs sm:text-sm md:text-base",
+      headerSubtitle: "text-[9px] sm:text-[10px] md:text-xs",
       partySize: "text-[3.5rem] sm:text-[4rem] md:text-[4.5rem] lg:text-[5rem]",
       metaTextSize: "text-[8px] px-1 py-0.25",
       competitorText: "text-[9px] sm:text-[10px] md:text-xs",
@@ -781,7 +787,7 @@ export default function PublicDisplay() {
                       <h2 className={`${layout.headerTitle} font-black uppercase tracking-tighter italic text-white font-display`}>
                         Arena {arenaNum}
                       </h2>
-                      <p className="text-white/80 text-[8px] sm:text-[10px] font-bold uppercase tracking-widest mt-0.5 font-mono">
+                      <p className={`text-white/80 ${layout.headerSubtitle} font-bold uppercase tracking-widest mt-0.5 font-mono`}>
                         {playingPesilat ? (playingPesilat.kategori || "Tanding") : "Maintenance / Standby"}
                       </p>
                     </div>
