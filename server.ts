@@ -9,9 +9,9 @@ dotenv.config();
 
 const app = express();
 app.use(express.json());
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
 
-const DB_URL = process.env.DATABASE_URL;
+const DB_URL = process.env.DATABASE_URL || (process.env.DB_HOST ? `mysql://${process.env.DB_USER}:${process.env.DB_PASS}@${process.env.DB_HOST}/${process.env.DB_NAME}` : undefined);
 if (!DB_URL) {
   console.error("DATABASE_URL is not set. Please set it to a valid PostgreSQL connection string in .env");
 }
