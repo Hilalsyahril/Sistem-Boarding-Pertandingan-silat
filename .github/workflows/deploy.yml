@@ -1,0 +1,36 @@
+name: Deploy ke Hosting Apache
+
+on:
+  push:
+    branches:
+      - main # Akan berjalan otomatis setiap ada push ke branch main
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+    # 1. Mengambil kode terbaru dari GitHub
+    - name: Checkout Code
+      uses: actions/checkout@v3
+
+    # 2. Menyiapkan environment Node.js
+    - name: Setup Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: '18'
+
+    # 3. Menginstal library & mem-build aplikasi React
+    - name: Install & Build
+      run: |
+        npm install
+        npm run build
+
+    # 4. Mengirimkan folder hasil build (dist) ke hosting
+    - name: Deploy via FTP
+      uses: SamKirkland/FTP-Deploy-Action@v4.3.4
+      with:
+        server: ${{ secrets.FTP_SERVER }}
+        username: ${{ secrets.FTP_USERNAME }}
+        password: ${{ secrets.FTP_PASSWORD }}
+        local-dir: ./dist/ # Hanya mengupload folder web statis
+        server-dir: /public_html/ # Sesuaikan dengan folder root website Anda (contoh: /htdocs/ atau /public_html/)
