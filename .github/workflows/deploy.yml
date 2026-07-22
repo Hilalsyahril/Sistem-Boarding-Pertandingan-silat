@@ -54,3 +54,6 @@ jobs:
         password: ${{ secrets.FTP_PASSWORD }}
         server-dir: /domains/boardingsilat.mra.my.id/public_html/
         local-dir: ./deploy_folder/
+        exclude: |
+          **/.htaccess
+          **/.env
