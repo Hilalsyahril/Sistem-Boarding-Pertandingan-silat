@@ -44,7 +44,7 @@ jobs:
         PKG
         
         # Gunakan app.cjs sebagai app.js (Entry point cPanel)
-        cp app.cjs deploy_folder/app.js
+        echo "require('./dist/server.cjs');" > deploy_folder/app.js
 
     - name: Deploy to FTP
       uses: SamKirkland/FTP-Deploy-Action@v4.3.5
