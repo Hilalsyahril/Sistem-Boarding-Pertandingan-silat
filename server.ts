@@ -432,8 +432,27 @@ async function startServer() {
     const vite = await createViteServer({ server: { middlewareMode: true }, appType: "spa" });
     app.use(vite.middlewares);
   } else {
-    const distPath = path.join(process.cwd(), "dist");
+    const distPath = typeof __dirname !== "undefined" ? __dirname : path.join(process.cwd(), "dist");
+    
+    // Fallback static paths for robust cPanel deployment
+    const rootPath = process.cwd();
     app.use(express.static(distPath));
+    app.use('/assets', express.static(path.join(distPath, 'assets')));
+    app.use('/assets', express.static(path.join(rootPath, 'assets')));
+    app.use('/assets', express.static(path.join(rootPath, 'dist', 'assets')));
+    
+    app.get("/api/debug-paths", (req, res) => {
+      const fs = require('fs');
+      res.json({
+        __dirname: typeof __dirname !== "undefined" ? __dirname : "undefined",
+        cwd: process.cwd(),
+        distPath,
+        filesInDist: fs.existsSync(distPath) ? fs.readdirSync(distPath) : null,
+        filesInAssets: fs.existsSync(path.join(distPath, 'assets')) ? fs.readdirSync(path.join(distPath, 'assets')) : null,
+        filesInRootAssets: fs.existsSync(path.join(rootPath, 'assets')) ? fs.readdirSync(path.join(rootPath, 'assets')) : null
+      });
+    });
+
     app.get("*", (req, res) => res.sendFile(path.join(distPath, "index.html")));
   }
 
