@@ -2,7 +2,6 @@
 import express from "express";
 import path from "path";
 import dotenv from "dotenv";
-import { createServer as createViteServer } from "vite";
 import mysql from "mysql2/promise";
 
 dotenv.config();
@@ -11,7 +10,7 @@ const app = express();
 app.use(express.json());
 const PORT = process.env.PORT || 3000;
 
-const DB_URL = process.env.DATABASE_URL || (process.env.DB_HOST ? `mysql://${process.env.DB_USER}:${process.env.DB_PASS}@${process.env.DB_HOST}/${process.env.DB_NAME}` : undefined);
+const DB_URL = process.env.DATABASE_URL || (process.env.DB_HOST ? `mysql://${process.env.DB_USER || "root"}:${process.env.DB_PASS || ""}@${process.env.DB_HOST}/${process.env.DB_NAME || "test"}` : undefined);
 if (!DB_URL) {
   console.error("DATABASE_URL is not set. Please set it to a valid PostgreSQL connection string in .env");
 }
@@ -422,9 +421,14 @@ app.delete("/api/announce/:id", (req, res) => {
 });
 
 async function startServer() {
-  await initDb();
+  try {
+    await initDb();
+  } catch (err) {
+    console.error("Failed to initialize database:", err);
+  }
   
   if (process.env.NODE_ENV !== "production") {
+    const { createServer: createViteServer } = await import("vite");
     const vite = await createViteServer({ server: { middlewareMode: true }, appType: "spa" });
     app.use(vite.middlewares);
   } else {
