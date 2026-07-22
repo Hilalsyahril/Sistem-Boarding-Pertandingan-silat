@@ -503,10 +503,10 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
           resData = await res.json();
         } catch (e) {}
         if (!res.ok) {
-          throw new Error(resData.error || "Gagal menyimpan data import ke server.");
+          throw new Error((resData as any).error || "Gagal menyimpan data import ke server.");
         }
 
-        setSuccess(`Berhasil mengimpor ${resData.count} data partai/pesilat dari Excel!`);
+        setSuccess(`Berhasil mengimpor ${(resData as any).count} data partai/pesilat dari Excel!`);
         fetchInitialData();
       } catch (err: any) {
         setError(err.message || "Gagal mengimpor file Excel.");
@@ -710,7 +710,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
       } catch (e) {}
 
       if (!res.ok) {
-        throw new Error(responseData.error || "Gagal menyimpan data pesilat.");
+        throw new Error((responseData as any).error || "Gagal menyimpan data pesilat.");
       }
 
       setSuccess(isEditMode ? "Data pesilat berhasil diperbarui!" : "Pesilat/partai baru berhasil ditambahkan!");
@@ -798,7 +798,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
       } catch (e) {}
 
       if (!res.ok) {
-        throw new Error(data.error || "Gagal memperbarui jumlah arena.");
+        throw new Error((data as any).error || "Gagal memperbarui jumlah arena.");
       }
 
       setJumlahArena(inputJumlahArena);

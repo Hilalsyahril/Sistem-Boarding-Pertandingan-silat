@@ -1,41 +1,45 @@
-name: Deploy Node.js App via FTP
+name: Deploy to cPanel via FTP
 
 on:
   push:
     branches:
-      - main # Script berjalan otomatis saat ada push ke branch 'main'
+      - main # Ubah ke 'master' jika branch utama Anda bernama master
 
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout Code
+    - name: Checkout Repository
       uses: actions/checkout@v4
 
     - name: Setup Node.js
       uses: actions/setup-node@v4
       with:
-        node-version: '16.20.2'
+        node-version: '16'
 
     - name: Install Dependencies
       run: npm install
 
-    - name: Build App
+    - name: Build Application
       run: npm run build
 
-    - name: Prepare Deployment Folder
-      run: |
-        mkdir deploy_folder
-        cp -r dist/* deploy_folder/
-        cp package.json deploy_folder/
-        cp package-lock.json deploy_folder/
-
-    - name: Sync files via FTP
+    - name: Deploy to FTP
       uses: SamKirkland/FTP-Deploy-Action@v4.3.5
       with:
         server: ${{ secrets.FTP_SERVER }}
         username: ${{ secrets.FTP_USERNAME }}
         password: ${{ secrets.FTP_PASSWORD }}
-        local-dir: ./deploy_folder/
-        server-dir: /public_html/ # PENTING: Ubah sesuai dengan nama "Application Root" di Langkah 2
+        # Jika menggunakan akun FTP utama, pathnya biasanya seperti di bawah ini:
+        server-dir: /domains/boardingsilat.mra.my.id/public_html/ 
+        # Jika menggunakan akun FTP khusus domain, ubah menjadi server-dir: /public_html/ atau server-dir: /
+        exclude: |
+          **/.git*
+          **/.git*/**
+          node_modules/**
+          src/**
+          server.ts
+          README.md
+          tsconfig.json
+          vite.config.ts
+          .env.example
