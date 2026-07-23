@@ -31,7 +31,16 @@ let rawPool: mysql.Pool | null = DB_URL ? mysql.createPool(DB_URL) : null;
 
 const pgPool = rawPool ? {
   query: async (text: string, params: any[] = []) => {
-    let sql = text.replace(/\$[0-9]+/g, "?");
+    let newParams: any[] = [];
+    let hasParams = false;
+    let sql = text.replace(/\$([0-9]+)/g, (match, p1) => {
+      hasParams = true;
+      const index = parseInt(p1, 10) - 1;
+      newParams.push(params[index]);
+      return "?";
+    });
+    
+    let finalParams = hasParams ? newParams : params;
     
     // Postgres to MySQL specific fixes
     sql = sql.replace(/VARCHAR\(255\)/g, 'VARCHAR(255)');
@@ -44,7 +53,7 @@ const pgPool = rawPool ? {
        sql = sql.replace("RETURNING *", "");
     }
 
-    const [result] = await rawPool!.query(sql, params);
+    const [result] = await rawPool!.query(sql, finalParams);
     
     if (Array.isArray(result)) {
       return { rows: result, rowCount: result.length };
