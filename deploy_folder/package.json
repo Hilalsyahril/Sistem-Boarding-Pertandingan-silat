@@ -1,0 +1,9 @@
+{
+  "name": "boarding-silat-prod",
+  "version": "1.0.0",
+  "dependencies": {
+    "express": "^4.21.2",
+    "mysql2": "^3.11.0",
+    "dotenv": "^17.2.3"
+  }
+}
