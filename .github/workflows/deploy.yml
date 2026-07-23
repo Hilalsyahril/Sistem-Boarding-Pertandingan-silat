@@ -56,4 +56,11 @@ jobs:
         local-dir: ./deploy_folder/
         exclude: |
           **/.htaccess
+          .htaccess
           **/.env
+          .env
+          .ftp-deploy-sync-state.json
+          .cl.selector
+          .cagefs
+          .npm
+          .php

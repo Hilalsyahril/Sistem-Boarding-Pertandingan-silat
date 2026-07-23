@@ -428,7 +428,7 @@ async function startServer() {
     console.error("Failed to initialize database:", err);
   }
   
-  const isProd = process.env.NODE_ENV === "production" || fs.existsSync(path.join(typeof __dirname !== "undefined" ? __dirname : process.cwd(), "index.html"));
+  const isProd = process.env.NODE_ENV === "production" || !fs.existsSync(path.join(process.cwd(), "vite.config.ts"));
   if (!isProd) {
     const { createServer: createViteServer } = await import("vite");
     const vite = await createViteServer({ server: { middlewareMode: true }, appType: "spa" });
