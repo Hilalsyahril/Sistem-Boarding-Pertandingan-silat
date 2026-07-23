@@ -112,7 +112,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
     setLoading(true);
     setShowDeleteConfirm(null);
     try {
-      const res = await fetch('/api/pesilat', { method: 'DELETE' });
+      const res = await fetch('/api/pesilat?_method=DELETE', { method: 'POST' });
       if (!res.ok) {
         throw new Error("Gagal menghapus semua data");
       }
@@ -133,7 +133,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
     setShowDeleteConfirm(null);
     try {
       for (const id of selectedIds) {
-        await fetch(`/api/pesilat/${id}`, { method: 'DELETE' });
+        await fetch(`/api/pesilat/${id}?_method=DELETE`, { method: 'POST' });
       }
       setSuccess("Berhasil menghapus data pesilat yang dipilih.");
       setSelectedIds([]);
@@ -307,7 +307,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
   // Handler jika timer habis, akan dipanggil otomatis
   const handleTimeoutMatch = async (id: string) => {
     try {
-      const res = await fetch(`/api/pesilat/${id}/timeout`, { method: "PUT" });
+      const res = await fetch(`/api/pesilat/${id}/timeout?_method=PUT`, { method: 'POST' });
       if (res.ok) {
         await fetchInitialData(3, 1500, true);
       }
@@ -363,7 +363,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
         });
       });
 
-      const res = await fetch(`/api/pesilat/${id}/play`, { method: "PUT" });
+      const res = await fetch(`/api/pesilat/${id}/play?_method=PUT`, { method: 'POST' });
       if (res.ok) {
         fetchInitialData(3, 1500, true);
       }
@@ -383,7 +383,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
         return p;
       }));
 
-      const res = await fetch(`/api/pesilat/${id}/stop`, { method: "PUT" });
+      const res = await fetch(`/api/pesilat/${id}/stop?_method=PUT`, { method: 'POST' });
       if (res.ok) {
         fetchInitialData(3, 1500, true);
       }
@@ -407,8 +407,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
         return p;
       }));
 
-      const res = await fetch(`/api/pesilat/${id}/timer`, {
-        method: "PUT",
+      const res = await fetch(`/api/pesilat/${id}/timer?_method=PUT`, { method: 'POST',
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ is_done: !currentDoneStatus })
       });
@@ -648,8 +647,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
         return p;
       }));
 
-      const res = await fetch(`/api/pesilat/${id}/timer`, {
-        method: "PUT",
+      const res = await fetch(`/api/pesilat/${id}/timer?_method=PUT`, { method: 'POST',
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload)
       });
@@ -690,8 +688,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
       let res;
       if (isEditMode) {
         // Edit Pesilat
-        res = await fetch(`/api/pesilat/${pesilatId}`, {
-          method: "PUT",
+        res = await fetch(`/api/pesilat/${pesilatId}?_method=PUT`, { method: 'POST',
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload)
         });
@@ -757,8 +754,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
     setSingleDeleteTarget(null);
 
     try {
-      const res = await fetch(`/api/pesilat/${id}`, {
-        method: "DELETE"
+      const res = await fetch(`/api/pesilat/${id}?_method=DELETE`, { method: 'POST'
       });
 
       if (!res.ok) {
@@ -786,8 +782,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
     }
 
     try {
-      const res = await fetch("/api/pengaturan_arena", {
-        method: "PUT",
+      const res = await fetch("/api/pengaturan_arena?_method=PUT", { method: 'POST',
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ jumlah_arena: inputJumlahArena })
       });

@@ -8,7 +8,17 @@ import mysql from "mysql2/promise";
 dotenv.config();
 
 const app = express();
+
 app.use(express.json());
+
+// Method override middleware for cPanel / ModSecurity blocking PUT/DELETE
+app.use((req, res, next) => {
+  if (req.query._method && req.method === 'POST') {
+    req.method = req.query._method.toUpperCase();
+  }
+  next();
+});
+
 const PORT = process.env.PORT || 3000;
 
 const DB_URL = process.env.DATABASE_URL || (process.env.DB_HOST ? `mysql://${process.env.DB_USER || "root"}:${process.env.DB_PASS || ""}@${process.env.DB_HOST}/${process.env.DB_NAME || "test"}` : undefined);
@@ -133,8 +143,16 @@ async function setJumlahArena(val: number) {
 
 async function getPesilats() {
   if (!pgPool) return [];
-  const res = await pgPool.query("SELECT * FROM pesilat ORDER BY arena, CAST(NULLIF(regexp_replace(nomor_partai, '[^0-9]', '', 'g'), '') AS INTEGER)");
-  return res.rows.map(mapPesilat);
+  const res = await pgPool.query("SELECT * FROM pesilat");
+  const rows = res.rows.map(mapPesilat);
+  return rows.sort((a, b) => {
+    if (a.arena !== b.arena) {
+      return (Number(a.arena) || 0) - (Number(b.arena) || 0);
+    }
+    const numA = parseInt((a.nomor_partai || "").toString().replace(/[^0-9]/g, ''), 10) || 0;
+    const numB = parseInt((b.nomor_partai || "").toString().replace(/[^0-9]/g, ''), 10) || 0;
+    return numA - numB;
+  });
 }
 
 async function getPesilatById(id: string) {

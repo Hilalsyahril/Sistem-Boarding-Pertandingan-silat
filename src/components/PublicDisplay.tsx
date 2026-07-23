@@ -221,7 +221,7 @@ export default function PublicDisplay() {
 
   const handleTimeoutMatch = async (id: string) => {
     try {
-      const res = await fetch(`/api/pesilat/${id}/timeout`, { method: "PUT" });
+      const res = await fetch(`/api/pesilat/${id}/timeout?_method=PUT`, { method: 'POST' });
       if (res.ok) {
         const pesilatRes = await fetch(`/api/pesilat?_t=${Date.now()}`);
         const pesilatData = await pesilatRes.json();
@@ -271,7 +271,7 @@ export default function PublicDisplay() {
               speechQueueRef.current.push({ text: ann.text, arenaNum: ann.arenaNum, pesilatId: ann.pesilatId, annId: ann.id });
               processQueue();
             }
-            await fetch(`/api/announce/${ann.id}`, { method: "DELETE" });
+            await fetch(`/api/announce/${ann.id}?_method=DELETE`, { method: 'POST' });
           }
         }
       } catch (err) {
