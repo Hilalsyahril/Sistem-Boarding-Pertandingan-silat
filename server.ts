@@ -59,12 +59,11 @@ if (pgPool) {
 
 async function initDb() {
   if (!pgPool) return;
-  const schema = `
-    CREATE TABLE IF NOT EXISTS pengaturan_arena (
+  await pgPool.query(`CREATE TABLE IF NOT EXISTS pengaturan_arena (
       id VARCHAR(255) PRIMARY KEY,
       jumlah_arena INTEGER DEFAULT 3
-    );
-    CREATE TABLE IF NOT EXISTS pesilat (
+    )`);
+  await pgPool.query(`CREATE TABLE IF NOT EXISTS pesilat (
       id VARCHAR(255) PRIMARY KEY,
       nomor_partai VARCHAR(255),
       nama_pesilat VARCHAR(255),
@@ -81,15 +80,13 @@ async function initDb() {
       timer_running BOOLEAN DEFAULT false,
       timer_last_updated_at BIGINT,
       is_done BOOLEAN DEFAULT false
-    );
-    CREATE TABLE IF NOT EXISTS admin_users (
+    )`);
+  await pgPool.query(`CREATE TABLE IF NOT EXISTS admin_users (
       id VARCHAR(255) PRIMARY KEY,
       username VARCHAR(255) UNIQUE,
       password VARCHAR(255),
       token VARCHAR(255)
-    );
-  `;
-  await pgPool.query(schema);
+    )`);
   await pgPool.query(`INSERT INTO pengaturan_arena (id, jumlah_arena) VALUES ('00000000-0000-0000-0000-000000000001', 3) ON CONFLICT (id) DO NOTHING;`);
   
   // Seed default admin user
@@ -186,7 +183,7 @@ async function deleteAllPesilat() {
 app.post("/api/admin/login", async (req, res) => {
   try {
     const { username, password } = req.body;
-    if (!pgPool) return res.status(500).json({ error: "Database not connected" });
+    if (!pgPool) return res.status(200).json({ error: "Database not connected", is_500: true });
     
     const result = await pgPool.query("SELECT * FROM admin_users WHERE username = $1 AND password = $2", [username, password]);
     if (result.rows.length > 0) {
@@ -196,13 +193,13 @@ app.post("/api/admin/login", async (req, res) => {
     } else {
       res.status(401).json({ error: "Username atau Password salah" });
     }
-  } catch (error: any) { res.status(500).json({ error: error.message }); }
+  } catch (error: any) { res.status(200).json({ error: error.message, is_500: true }); }
 });
 
 app.post("/api/admin/verify", async (req, res) => {
   try {
     const { token } = req.body;
-    if (!pgPool) return res.status(500).json({ error: "Database not connected" });
+    if (!pgPool) return res.status(200).json({ error: "Database not connected", is_500: true });
     
     if (!token) return res.status(401).json({ error: "No token" });
     const result = await pgPool.query("SELECT * FROM admin_users WHERE token = $1", [token]);
@@ -211,13 +208,13 @@ app.post("/api/admin/verify", async (req, res) => {
     } else {
       res.status(401).json({ valid: false });
     }
-  } catch (error: any) { res.status(500).json({ error: error.message }); }
+  } catch (error: any) { res.status(200).json({ error: error.message, is_500: true }); }
 });
 
 app.post("/api/admin/change-password", async (req, res) => {
   try {
     const { token, oldPassword, newPassword } = req.body;
-    if (!pgPool) return res.status(500).json({ error: "Database not connected" });
+    if (!pgPool) return res.status(200).json({ error: "Database not connected", is_500: true });
     
     const result = await pgPool.query("SELECT * FROM admin_users WHERE token = $1 AND password = $2", [token, oldPassword]);
     if (result.rows.length > 0) {
@@ -226,7 +223,7 @@ app.post("/api/admin/change-password", async (req, res) => {
     } else {
       res.status(401).json({ error: "Password lama salah" });
     }
-  } catch (error: any) { res.status(500).json({ error: error.message }); }
+  } catch (error: any) { res.status(200).json({ error: error.message, is_500: true }); }
 });
 
 app.get("/api/config-status", (req, res) => {
@@ -237,7 +234,7 @@ app.get("/api/pesilat", async (req, res) => {
   try {
     const list = await getPesilats();
     res.json(list);
-  } catch (error: any) { res.status(500).json({ error: error.message }); }
+  } catch (error: any) { res.status(200).json({ error: error.message, is_500: true }); }
 });
 
 app.post("/api/pesilat", async (req, res) => {
@@ -245,7 +242,7 @@ app.post("/api/pesilat", async (req, res) => {
     const newPesilat = { ...req.body, id: req.body.id || Date.now().toString(), timer_last_updated_at: Date.now() };
     await insertPesilat(newPesilat);
     res.json(newPesilat);
-  } catch (error: any) { res.status(500).json({ error: error.message }); }
+  } catch (error: any) { res.status(200).json({ error: error.message, is_500: true }); }
 });
 
 app.post("/api/pesilat/batch", async (req, res) => {
@@ -255,14 +252,14 @@ app.post("/api/pesilat/batch", async (req, res) => {
       await insertPesilat({ ...item, id: item.id || Date.now().toString() + Math.random().toString(), timer_last_updated_at: Date.now() });
     }
     res.json(await getPesilats());
-  } catch (error: any) { res.status(500).json({ error: error.message }); }
+  } catch (error: any) { res.status(200).json({ error: error.message, is_500: true }); }
 });
 
 app.put("/api/pesilat/:id", async (req, res) => {
   try {
     await updatePesilat(req.params.id, req.body);
     res.json(await getPesilatById(req.params.id));
-  } catch (error: any) { res.status(500).json({ error: error.message }); }
+  } catch (error: any) { res.status(200).json({ error: error.message, is_500: true }); }
 });
 
 app.put("/api/pesilat/:id/play", async (req, res) => {
@@ -288,14 +285,14 @@ app.put("/api/pesilat/:id/play", async (req, res) => {
     });
     
     res.json(await getPesilatById(id));
-  } catch (error: any) { res.status(500).json({ error: error.message }); }
+  } catch (error: any) { res.status(200).json({ error: error.message, is_500: true }); }
 });
 
 app.put("/api/pesilat/:id/stop", async (req, res) => {
   try {
     await updatePesilat(req.params.id, { is_playing: false, timer_running: false, is_done: true, timer_seconds_left: 0 });
     res.json(await getPesilatById(req.params.id));
-  } catch (error: any) { res.status(500).json({ error: error.message }); }
+  } catch (error: any) { res.status(200).json({ error: error.message, is_500: true }); }
 });
 
 app.put("/api/pesilat/:id/timer", async (req, res) => {
@@ -306,14 +303,14 @@ app.put("/api/pesilat/:id/timer", async (req, res) => {
     }
     await updatePesilat(req.params.id, updateData);
     res.json(await getPesilatById(req.params.id));
-  } catch (error: any) { res.status(500).json({ error: error.message }); }
+  } catch (error: any) { res.status(200).json({ error: error.message, is_500: true }); }
 });
 
 app.put("/api/pesilat/:id/timeout", async (req, res) => {
   try {
     const id = req.params.id;
     
-    if (!pgPool) return res.status(500).json({ error: "Database not connected" });
+    if (!pgPool) return res.status(200).json({ error: "Database not connected", is_500: true });
     
     // Atomic check-and-set to prevent race conditions from multiple clients triggering timeout concurrently
     const updateRes = await pgPool.query(
@@ -342,21 +339,21 @@ app.put("/api/pesilat/:id/timeout", async (req, res) => {
     }
 
     res.json(await getPesilatById(id));
-  } catch (error: any) { res.status(500).json({ error: error.message }); }
+  } catch (error: any) { res.status(200).json({ error: error.message, is_500: true }); }
 });
 
 app.delete("/api/pesilat/:id", async (req, res) => {
   try {
     await deletePesilat(req.params.id);
     res.json({ success: true });
-  } catch (error: any) { res.status(500).json({ error: error.message }); }
+  } catch (error: any) { res.status(200).json({ error: error.message, is_500: true }); }
 });
 
 app.delete("/api/pesilat", async (req, res) => {
   try {
     await deleteAllPesilat();
     res.json({ success: true });
-  } catch (error: any) { res.status(500).json({ error: error.message }); }
+  } catch (error: any) { res.status(200).json({ error: error.message, is_500: true }); }
 });
 
 app.post("/api/pesilat/delete-batch", async (req, res) => {
@@ -365,20 +362,20 @@ app.post("/api/pesilat/delete-batch", async (req, res) => {
       await deletePesilat(id);
     }
     res.json({ success: true });
-  } catch (error: any) { res.status(500).json({ error: error.message }); }
+  } catch (error: any) { res.status(200).json({ error: error.message, is_500: true }); }
 });
 
 app.get("/api/pengaturan_arena", async (req, res) => {
   try {
     res.json([{ id: "00000000-0000-0000-0000-000000000001", jumlah_arena: await getJumlahArena() }]);
-  } catch (error: any) { res.status(500).json({ error: error.message }); }
+  } catch (error: any) { res.status(200).json({ error: error.message, is_500: true }); }
 });
 
 app.put("/api/pengaturan_arena", async (req, res) => {
   try {
     await setJumlahArena(req.body.jumlah_arena || 3);
     res.json({ id: "00000000-0000-0000-0000-000000000001", jumlah_arena: await getJumlahArena() });
-  } catch (error: any) { res.status(500).json({ error: error.message }); }
+  } catch (error: any) { res.status(200).json({ error: error.message, is_500: true }); }
 });
 
 app.post("/api/tts", async (req, res) => {
@@ -401,7 +398,7 @@ app.post("/api/tts", async (req, res) => {
     
     res.json({ audio: data.data });
   } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    res.status(200).json({ error: error.message, is_500: true });
   }
 });
 
