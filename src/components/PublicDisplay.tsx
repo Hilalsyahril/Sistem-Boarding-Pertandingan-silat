@@ -13,12 +13,28 @@ export default function PublicDisplay() {
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
 
   const [isAudioEnabled, setIsAudioEnabled] = useState<boolean>(true);
+  const isAudioEnabledRef = useRef(isAudioEnabled);
+  useEffect(() => {
+    isAudioEnabledRef.current = isAudioEnabled;
+    if (!isAudioEnabled) {
+      isSpeakingRef.current = false;
+      speechQueueRef.current = [];
+      if (activeSourceRef.current) {
+        try { activeSourceRef.current.stop(); } catch (e) {}
+        activeSourceRef.current = null;
+      }
+      if ("speechSynthesis" in window) {
+        window.speechSynthesis.cancel();
+      }
+    }
+  }, [isAudioEnabled]);
   const [hasInteracted, setHasInteracted] = useState<boolean>(false);
   const announcedIdsRef = useRef<Record<number, string>>({});
   const processedTimeoutsRef = useRef<Set<string>>(new Set());
   const activeUtterancesRef = useRef<any[]>([]);
   const speechQueueRef = useRef<{ text: string; arenaNum: number; pesilatId: string }[]>([]);
   const isSpeakingRef = useRef<boolean>(false);
+  const activeSourceRef = useRef<any>(null);
 
   // Removed auto-unlock to comply with browser audio policies
   useEffect(() => {
@@ -72,7 +88,7 @@ export default function PublicDisplay() {
   };
 
   const processQueue = async () => {
-    if (!isAudioEnabled) {
+    if (!isAudioEnabledRef.current) {
       speechQueueRef.current = [];
       isSpeakingRef.current = false;
       return;
@@ -99,14 +115,24 @@ export default function PublicDisplay() {
       if (isDone) return;
       isDone = true;
       if (safetyTimeout) clearTimeout(safetyTimeout);
+      if (resumeTimeout) clearTimeout(resumeTimeout);
       isSpeakingRef.current = false;
-      speechQueueRef.current.shift();
+      if (speechQueueRef.current[0] === current) {
+        speechQueueRef.current.shift();
+      }
       setTimeout(() => {
         processQueue();
       }, 150);
     };
 
+    let resumeTimeout: any;
     try {
+      // Set a hard timeout in case any await (like resume) hangs indefinitely
+      resumeTimeout = setTimeout(() => {
+        console.warn("Audio processing hung, forcing finish");
+        finishUtterance();
+      }, 20000);
+
       if (current.useNativeFallback) {
         if ('speechSynthesis' in window) {
           const utterance = new SpeechSynthesisUtterance(current.text);
@@ -153,6 +179,7 @@ export default function PublicDisplay() {
       const audioBuffer = await audioCtx.decodeAudioData(bytes.buffer);
       
       const source = audioCtx.createBufferSource();
+      activeSourceRef.current = source;
       source.buffer = audioBuffer;
       // Normal tempo
       source.connect(audioCtx.destination);
@@ -172,7 +199,7 @@ export default function PublicDisplay() {
   };
 
   const announceMatch = (arenaNum: number, p: Pesilat) => {
-    if (!isAudioEnabled) return;
+    if (!isAudioEnabledRef.current) return;
 
     const cleanKategori = p.kategori || "Tanding";
     const cleanKelas = (p.kelas || "")
@@ -665,7 +692,10 @@ export default function PublicDisplay() {
 
           {/* AUDIO CONTROLLER TOGGLE */}
           <button
-            onClick={() => setIsAudioEnabled(prev => !prev)}
+            onClick={() => {
+              setIsAudioEnabled(prev => !prev);
+              if (!hasInteracted) handleInteraction();
+            }}
             className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg font-bold text-[9px] sm:text-[10px] uppercase tracking-wider transition cursor-pointer shadow-md border ${
               isAudioEnabled 
                 ? "bg-amber-400 text-neutral-950 border-amber-300 hover:bg-amber-300" 

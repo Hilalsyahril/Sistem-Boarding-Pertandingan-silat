@@ -281,6 +281,25 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
     return () => clearInterval(interval);
   }, []);
 
+  
+  // Background polling to keep admin in sync with server timer
+  useEffect(() => {
+    const interval = setInterval(async () => {
+      try {
+        const res = await fetch(`/api/pesilat?_t=${Date.now()}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (Array.isArray(data)) {
+            setPesilatList(data);
+          }
+        }
+      } catch (e) {
+        // ignore
+      }
+    }, 1500);
+    return () => clearInterval(interval);
+  }, []);
+
   // Local real-time timer countdown loop (so countdown is buttery smooth on screen!)
   useEffect(() => {
     const timer = setInterval(() => {
@@ -1249,7 +1268,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                                   }`}
                                   title={activePesilat.timer_running ? "Pause Waktu" : "Mulai Waktu"}
                                 >
-                                  {activePesilat.timer_running ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5" />}
+                                  {activePesilat.timer_running ? <><Pause className="w-3.5 h-3.5" /><span className="text-xs font-semibold ml-1">Jeda</span></> : <><Play className="w-3.5 h-3.5" /><span className="text-xs font-semibold ml-1">Mulai</span></>}
                                 </button>
 
                                 {/* Reset Timer */}

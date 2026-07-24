@@ -32410,9 +32410,9 @@ var require_umd = __commonJS({
   }
 });
 
-// node_modules/mysql2/node_modules/iconv-lite/lib/bom-handling.js
+// node_modules/iconv-lite/lib/bom-handling.js
 var require_bom_handling3 = __commonJS({
-  "node_modules/mysql2/node_modules/iconv-lite/lib/bom-handling.js"(exports2) {
+  "node_modules/iconv-lite/lib/bom-handling.js"(exports2) {
     "use strict";
     var BOMChar = "\uFEFF";
     exports2.PrependBOM = PrependBOMWrapper;
@@ -32456,9 +32456,9 @@ var require_bom_handling3 = __commonJS({
   }
 });
 
-// node_modules/mysql2/node_modules/iconv-lite/lib/helpers/merge-exports.js
+// node_modules/iconv-lite/lib/helpers/merge-exports.js
 var require_merge_exports = __commonJS({
-  "node_modules/mysql2/node_modules/iconv-lite/lib/helpers/merge-exports.js"(exports2, module2) {
+  "node_modules/iconv-lite/lib/helpers/merge-exports.js"(exports2, module2) {
     "use strict";
     var hasOwn = typeof Object.hasOwn === "undefined" ? Function.call.bind(Object.prototype.hasOwnProperty) : Object.hasOwn;
     function mergeModules(target, module3) {
@@ -32472,9 +32472,9 @@ var require_merge_exports = __commonJS({
   }
 });
 
-// node_modules/mysql2/node_modules/iconv-lite/encodings/internal.js
+// node_modules/iconv-lite/encodings/internal.js
 var require_internal3 = __commonJS({
-  "node_modules/mysql2/node_modules/iconv-lite/encodings/internal.js"(exports2, module2) {
+  "node_modules/iconv-lite/encodings/internal.js"(exports2, module2) {
     "use strict";
     var Buffer2 = require_safer().Buffer;
     module2.exports = {
@@ -32653,9 +32653,9 @@ var require_internal3 = __commonJS({
   }
 });
 
-// node_modules/mysql2/node_modules/iconv-lite/encodings/utf32.js
+// node_modules/iconv-lite/encodings/utf32.js
 var require_utf32 = __commonJS({
-  "node_modules/mysql2/node_modules/iconv-lite/encodings/utf32.js"(exports2) {
+  "node_modules/iconv-lite/encodings/utf32.js"(exports2) {
     "use strict";
     var Buffer2 = require_safer().Buffer;
     exports2._utf32 = Utf32Codec;
@@ -32806,4 +32806,9 @@ var require_utf32 = __commonJS({
     Utf32AutoEncoder.prototype.end = function() {
       return this.encoder.end();
     };
-    function Utf32AutoDeco
+    function Utf32AutoDecoder(options, codec) {
+      this.decoder = null;
+      this.initialBufs = [];
+      this.initialBufsLen = 0;
+      this.options = options || {};
+      this.icon

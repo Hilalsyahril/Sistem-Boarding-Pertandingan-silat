@@ -14,7 +14,7 @@ app.use(express.json());
 // Method override middleware for cPanel / ModSecurity blocking PUT/DELETE
 app.use((req, res, next) => {
   if (req.query._method && req.method === 'POST') {
-    req.method = req.query._method.toUpperCase();
+    req.method = (req.query._method as string).toUpperCase();
   }
   next();
 });
