@@ -487,6 +487,26 @@ async function startServer() {
     console.error("Failed to initialize database:", err);
   }
   
+  
+
+app.get("/api/download-source", (req, res) => {
+  const filePath = require('path').join(process.cwd(), 'public', 'source_code.zip');
+  if (fs.existsSync(filePath)) {
+    res.download(filePath, 'source_code.zip');
+  } else {
+    res.status(404).send('File not found');
+  }
+});
+
+  app.get("/api/download-zip", (req, res) => {
+  const filePath = require('path').join(process.cwd(), 'public', 'deploy_cpanel.zip');
+  if (fs.existsSync(filePath)) {
+    res.download(filePath, 'deploy_cpanel.zip');
+  } else {
+    res.status(404).send('File not found');
+  }
+});
+
   const isProd = process.env.NODE_ENV === "production" || !fs.existsSync(path.join(process.cwd(), "vite.config.ts"));
   if (!isProd) {
     const { createServer: createViteServer } = await import("vite");
