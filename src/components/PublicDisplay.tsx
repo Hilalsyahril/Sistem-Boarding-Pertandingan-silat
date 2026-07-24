@@ -529,8 +529,8 @@ export default function PublicDisplay() {
         gridRows: "grid-rows-1",
         cardPadding: "p-4 sm:p-5 gap-3 sm:gap-4",
         headerPadding: "p-3 sm:p-4",
-        headerTitle: "text-5xl sm:text-6xl md:text-7xl",
-        headerSubtitle: "text-2xl sm:text-3xl md:text-4xl",
+        headerTitle: "text-6xl sm:text-7xl md:text-8xl lg:text-[7rem]",
+        headerSubtitle: "text-3xl sm:text-4xl md:text-5xl lg:text-6xl",
         partySize: "text-[9rem] sm:text-[11rem] md:text-[13rem] lg:text-[16rem]",
         metaTextSize: "text-xs sm:text-sm px-2.5 py-1",
         competitorText: "text-base sm:text-lg md:text-xl font-bold",
@@ -549,8 +549,8 @@ export default function PublicDisplay() {
         gridRows: "grid-rows-2 md:grid-rows-1",
         cardPadding: "p-3 sm:p-4 gap-2.5 sm:gap-3",
         headerPadding: "p-2.5 sm:p-3",
-        headerTitle: "text-4xl sm:text-5xl md:text-6xl",
-        headerSubtitle: "text-xl sm:text-2xl md:text-3xl",
+        headerTitle: "text-5xl sm:text-6xl md:text-7xl lg:text-[5rem]",
+        headerSubtitle: "text-2xl sm:text-3xl md:text-4xl lg:text-[3rem]",
         partySize: "text-[7rem] sm:text-[8.5rem] md:text-[10rem] lg:text-[12rem]",
         metaTextSize: "text-[10px] sm:text-xs px-2 py-0.5",
         competitorText: "text-sm sm:text-base md:text-lg",
@@ -569,8 +569,8 @@ export default function PublicDisplay() {
         gridRows: "grid-rows-3 md:grid-rows-1",
         cardPadding: "p-2 sm:p-3 gap-2",
         headerPadding: "p-2 sm:p-2.5",
-        headerTitle: "text-3xl sm:text-4xl md:text-5xl lg:text-6xl",
-        headerSubtitle: "text-lg sm:text-xl md:text-2xl",
+        headerTitle: "text-4xl sm:text-5xl md:text-6xl lg:text-7xl",
+        headerSubtitle: "text-xl sm:text-2xl md:text-3xl lg:text-4xl",
         partySize: "text-[5.5rem] sm:text-[6.5rem] md:text-[7.5rem] lg:text-[8.5rem]",
         metaTextSize: "text-[9px] sm:text-[10px] px-1.5 py-0.5",
         competitorText: "text-xs sm:text-sm md:text-base",
@@ -589,8 +589,8 @@ export default function PublicDisplay() {
         gridRows: "grid-rows-4 sm:grid-rows-2",
         cardPadding: "p-2 gap-1.5 sm:gap-2",
         headerPadding: "p-1.5 sm:p-2",
-        headerTitle: "text-2xl sm:text-3xl md:text-4xl",
-        headerSubtitle: "text-base sm:text-lg md:text-xl",
+        headerTitle: "text-3xl sm:text-4xl md:text-5xl lg:text-6xl",
+        headerSubtitle: "text-lg sm:text-xl md:text-2xl lg:text-3xl",
         partySize: "text-[4.5rem] sm:text-[5rem] md:text-[6rem] lg:text-[6.5rem]",
         metaTextSize: "text-[8px] sm:text-[9px] px-1 py-0.5",
         competitorText: "text-[10px] sm:text-xs md:text-sm",
@@ -633,8 +633,8 @@ export default function PublicDisplay() {
       gridRows: "grid-rows-auto sm:grid-rows-3 lg:grid-rows-2",
       cardPadding: "p-1.5 gap-1",
       headerPadding: "p-1 sm:p-1.5",
-      headerTitle: "text-xl sm:text-2xl md:text-3xl",
-      headerSubtitle: "text-sm sm:text-base md:text-lg",
+      headerTitle: "text-2xl sm:text-3xl md:text-4xl",
+      headerSubtitle: "text-base sm:text-lg md:text-xl",
       partySize: "text-[3.5rem] sm:text-[4rem] md:text-[4.5rem] lg:text-[5rem]",
       metaTextSize: "text-[8px] px-1 py-0.25",
       competitorText: "text-[9px] sm:text-[10px] md:text-xs",
@@ -824,7 +824,7 @@ export default function PublicDisplay() {
                           <div className="mt-3 sm:mt-4 w-full max-w-xs text-left bg-slate-950/40 border border-slate-850 rounded-xl p-2 sm:p-3">
                             <p className="text-[8px] sm:text-[9px] font-bold text-indigo-400 font-mono uppercase tracking-wider mb-1">Partai Terjadwal:</p>
                             <div className="space-y-1">
-                              {waitingQueue.slice(0, 3).map((item) => (
+                              {waitingQueue.slice(0, 2).map((item) => (
                                 <div key={item.id} className="text-[9px] sm:text-xs flex justify-between text-slate-300 font-medium truncate">
                                   <span className="truncate">P-{item.nomor_partai} • {item.nama_pesilat}</span>
                                   <span className="text-[8px] sm:text-[9px] text-indigo-400 font-mono uppercase shrink-0 ml-1">G-{item.arena}</span>
@@ -969,7 +969,7 @@ export default function PublicDisplay() {
                               Tidak ada antrean berikutnya.
                             </div>
                           ) : (
-                            waitingQueue.slice(0, 3).map((pesilat) => (
+                            waitingQueue.slice(0, 2).map((pesilat) => (
                               <div 
                                 key={pesilat.id} 
                                 className={`bg-slate-950/20 ${layout.queueItemPadding} rounded flex justify-between items-center text-[7px] sm:text-[8px] border border-white/5`}
