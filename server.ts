@@ -490,7 +490,7 @@ async function startServer() {
   
 
 app.get("/api/download-source", (req, res) => {
-  const filePath = require('path').join(process.cwd(), 'public', 'source_code.zip');
+  const filePath = path.join(process.cwd(), 'public', 'source_code.zip');
   if (fs.existsSync(filePath)) {
     res.download(filePath, 'source_code.zip');
   } else {
@@ -499,7 +499,7 @@ app.get("/api/download-source", (req, res) => {
 });
 
   app.get("/api/download-zip", (req, res) => {
-  const filePath = require('path').join(process.cwd(), 'public', 'deploy_cpanel.zip');
+  const filePath = path.join(process.cwd(), 'public', 'deploy_cpanel.zip');
   if (fs.existsSync(filePath)) {
     res.download(filePath, 'deploy_cpanel.zip');
   } else {
@@ -534,7 +534,17 @@ app.get("/api/download-source", (req, res) => {
       });
     });
 
-    app.get("*", (req, res) => res.sendFile(path.join(distPath, "index.html")));
+    app.get("*", (req, res) => {
+      const p1 = path.join(distPath, "index.html");
+      const p2 = path.join(distPath, "dist", "index.html");
+      const p3 = path.join(process.cwd(), "dist", "index.html");
+      const p4 = path.join(process.cwd(), "index.html");
+      if (fs.existsSync(p1)) return res.sendFile(p1);
+      if (fs.existsSync(p2)) return res.sendFile(p2);
+      if (fs.existsSync(p3)) return res.sendFile(p3);
+      if (fs.existsSync(p4)) return res.sendFile(p4);
+      res.status(404).send("index.html not found");
+    });
   }
 
 }
