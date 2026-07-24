@@ -12,7 +12,7 @@ export default function PublicDisplay() {
   const [error, setError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
 
-  const [isAudioEnabled, setIsAudioEnabled] = useState<boolean>(true);
+  const [isAudioEnabled, setIsAudioEnabled] = useState<boolean>(false);
   const isAudioEnabledRef = useRef(isAudioEnabled);
   useEffect(() => {
     isAudioEnabledRef.current = isAudioEnabled;
@@ -20,7 +20,10 @@ export default function PublicDisplay() {
       isSpeakingRef.current = false;
       speechQueueRef.current = [];
       if (activeSourceRef.current) {
-        try { activeSourceRef.current.stop(); } catch (e) {}
+        try { 
+          if (activeSourceRef.current.stop) activeSourceRef.current.stop();
+          if (activeSourceRef.current.pause) activeSourceRef.current.pause();
+        } catch (e) {}
         activeSourceRef.current = null;
       }
       if ("speechSynthesis" in window) {
@@ -95,8 +98,12 @@ export default function PublicDisplay() {
     }
     if (speechQueueRef.current.length === 0) return;
     
-    // Trigger background fetch for all items in queue
-    speechQueueRef.current.forEach(i => fetchTTS(i));
+    // Only fetch the current item to avoid rate limits
+    fetchTTS(speechQueueRef.current[0]);
+    // Pre-fetch the next item if it exists
+    if (speechQueueRef.current.length > 1) {
+      setTimeout(() => fetchTTS(speechQueueRef.current[1]), 2000);
+    }
 
     const current = speechQueueRef.current[0];
     
