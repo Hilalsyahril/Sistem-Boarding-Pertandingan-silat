@@ -456,7 +456,6 @@ app.post("/api/tts", async (req, res) => {
     });
     
     const data = await ttsRes.json();
-    console.log("TTS Response Data:", JSON.stringify(data).substring(0, 100));
     if (!data.success) throw new Error("TikTok TTS failed: " + data.error);
     
     res.json({ audio: data.data });

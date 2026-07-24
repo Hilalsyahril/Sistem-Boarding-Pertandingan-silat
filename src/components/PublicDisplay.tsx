@@ -12,7 +12,7 @@ export default function PublicDisplay() {
   const [error, setError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
 
-  const [isAudioEnabled, setIsAudioEnabled] = useState<boolean>(false);
+  const [isAudioEnabled, setIsAudioEnabled] = useState<boolean>(true);
   const isAudioEnabledRef = useRef(isAudioEnabled);
   useEffect(() => {
     isAudioEnabledRef.current = isAudioEnabled;
@@ -20,10 +20,7 @@ export default function PublicDisplay() {
       isSpeakingRef.current = false;
       speechQueueRef.current = [];
       if (activeSourceRef.current) {
-        try { 
-          if (activeSourceRef.current.stop) activeSourceRef.current.stop();
-          if (activeSourceRef.current.pause) activeSourceRef.current.pause();
-        } catch (e) {}
+        try { activeSourceRef.current.stop(); } catch (e) {}
         activeSourceRef.current = null;
       }
       if ("speechSynthesis" in window) {
@@ -84,8 +81,8 @@ export default function PublicDisplay() {
         throw new Error("No audio returned");
       }
     } catch(e) {
-      console.warn("TTS fetch failed", e);
-      item.failed = true;
+      console.warn("TTS fetch failed, falling back to native browser TTS", e);
+      item.useNativeFallback = true;
     }
     processQueue();
   };
@@ -98,17 +95,13 @@ export default function PublicDisplay() {
     }
     if (speechQueueRef.current.length === 0) return;
     
-    // Only fetch the current item to avoid rate limits
-    fetchTTS(speechQueueRef.current[0]);
-    // Pre-fetch the next item if it exists
-    if (speechQueueRef.current.length > 1) {
-      setTimeout(() => fetchTTS(speechQueueRef.current[1]), 2000);
-    }
+    // Trigger background fetch for all items in queue
+    speechQueueRef.current.forEach(i => fetchTTS(i));
 
     const current = speechQueueRef.current[0];
     
     // Wait for the current item to finish fetching
-    if (!current.audioData && !current.failed) {
+    if (!current.audioData && !current.failed && !current.useNativeFallback) {
       return;
     }
 
@@ -139,6 +132,31 @@ export default function PublicDisplay() {
         console.warn("Audio processing hung, forcing finish");
         finishUtterance();
       }, 20000);
+
+      if (current.useNativeFallback) {
+        if ('speechSynthesis' in window) {
+          const utterance = new SpeechSynthesisUtterance(current.text);
+          utterance.lang = 'id-ID';
+          
+          // Try to find Indonesian voice
+          const voices = window.speechSynthesis.getVoices();
+          const idVoice = voices.find(v => v.lang.includes('id') || v.lang.includes('ID'));
+          if (idVoice) utterance.voice = idVoice;
+
+          utterance.onend = () => finishUtterance();
+          utterance.onerror = (e) => {
+            console.warn("Native TTS error", e);
+            finishUtterance();
+          };
+          window.speechSynthesis.speak(utterance);
+          
+          // Safety timeout
+          safetyTimeout = setTimeout(() => finishUtterance(), 15000);
+          return;
+        } else {
+          throw new Error("Native Web Speech API not supported");
+        }
+      }
 
       if (current.failed || !current.audioData) throw new Error("Audio data not available");
 
@@ -529,8 +547,8 @@ export default function PublicDisplay() {
         gridRows: "grid-rows-1",
         cardPadding: "p-4 sm:p-5 gap-3 sm:gap-4",
         headerPadding: "p-3 sm:p-4",
-        headerTitle: "text-6xl sm:text-7xl md:text-8xl lg:text-[7rem]",
-        headerSubtitle: "text-3xl sm:text-4xl md:text-5xl lg:text-6xl",
+        headerTitle: "text-3xl sm:text-4xl md:text-5xl",
+        headerSubtitle: "text-lg sm:text-xl md:text-2xl",
         partySize: "text-[9rem] sm:text-[11rem] md:text-[13rem] lg:text-[16rem]",
         metaTextSize: "text-xs sm:text-sm px-2.5 py-1",
         competitorText: "text-base sm:text-lg md:text-xl font-bold",
@@ -549,8 +567,8 @@ export default function PublicDisplay() {
         gridRows: "grid-rows-2 md:grid-rows-1",
         cardPadding: "p-3 sm:p-4 gap-2.5 sm:gap-3",
         headerPadding: "p-2.5 sm:p-3",
-        headerTitle: "text-5xl sm:text-6xl md:text-7xl lg:text-[5rem]",
-        headerSubtitle: "text-2xl sm:text-3xl md:text-4xl lg:text-[3rem]",
+        headerTitle: "text-2xl sm:text-3xl md:text-4xl",
+        headerSubtitle: "text-base sm:text-lg md:text-xl",
         partySize: "text-[7rem] sm:text-[8.5rem] md:text-[10rem] lg:text-[12rem]",
         metaTextSize: "text-[10px] sm:text-xs px-2 py-0.5",
         competitorText: "text-sm sm:text-base md:text-lg",
@@ -569,8 +587,8 @@ export default function PublicDisplay() {
         gridRows: "grid-rows-3 md:grid-rows-1",
         cardPadding: "p-2 sm:p-3 gap-2",
         headerPadding: "p-2 sm:p-2.5",
-        headerTitle: "text-4xl sm:text-5xl md:text-6xl lg:text-7xl",
-        headerSubtitle: "text-xl sm:text-2xl md:text-3xl lg:text-4xl",
+        headerTitle: "text-xl sm:text-2xl md:text-3xl",
+        headerSubtitle: "text-sm sm:text-base md:text-lg",
         partySize: "text-[5.5rem] sm:text-[6.5rem] md:text-[7.5rem] lg:text-[8.5rem]",
         metaTextSize: "text-[9px] sm:text-[10px] px-1.5 py-0.5",
         competitorText: "text-xs sm:text-sm md:text-base",
@@ -589,16 +607,16 @@ export default function PublicDisplay() {
         gridRows: "grid-rows-4 sm:grid-rows-2",
         cardPadding: "p-2 gap-1.5 sm:gap-2",
         headerPadding: "p-1.5 sm:p-2",
-        headerTitle: "text-3xl sm:text-4xl md:text-5xl lg:text-6xl",
-        headerSubtitle: "text-lg sm:text-xl md:text-2xl lg:text-3xl",
+        headerTitle: "text-base sm:text-lg md:text-xl",
+        headerSubtitle: "text-xs sm:text-sm md:text-base",
         partySize: "text-[4.5rem] sm:text-[5rem] md:text-[6rem] lg:text-[6.5rem]",
         metaTextSize: "text-[8px] sm:text-[9px] px-1 py-0.5",
         competitorText: "text-[10px] sm:text-xs md:text-sm",
         competitorPadding: "p-1 sm:p-1.5 border-l-2",
         timerText: "text-[10px] sm:text-xs md:text-sm",
-        queueMaxHeight: "max-h-[60px]",
+        queueMaxHeight: "max-h-[30px]",
         queueItemPadding: "p-0.5",
-        hideQueue: false,
+        hideQueue: true,
         hideFooter: true,
         onlyShowParty: false
       };
@@ -613,16 +631,16 @@ export default function PublicDisplay() {
         gridRows: "", // Let it flow naturally
         cardPadding: "p-2 gap-1",
         headerPadding: "p-1",
-        headerTitle: "text-lg sm:text-xl md:text-2xl",
-        headerSubtitle: "text-sm sm:text-base",
+        headerTitle: "text-sm sm:text-base",
+        headerSubtitle: "text-[10px] sm:text-xs",
         partySize: "text-[4rem] sm:text-[5.5rem] md:text-[7rem]", // Make it proportional to fit
         metaTextSize: "text-[8px] px-1 py-0.25",
         competitorText: "text-[9px]",
         competitorPadding: "p-1 border-l",
         timerText: "text-[9px]",
-        queueMaxHeight: "max-h-[40px]",
+        queueMaxHeight: "max-h-[20px]",
         queueItemPadding: "p-0.5",
-        hideQueue: false,
+        hideQueue: true,
         hideFooter: true,
         onlyShowParty: true
       };
@@ -633,16 +651,16 @@ export default function PublicDisplay() {
       gridRows: "grid-rows-auto sm:grid-rows-3 lg:grid-rows-2",
       cardPadding: "p-1.5 gap-1",
       headerPadding: "p-1 sm:p-1.5",
-      headerTitle: "text-2xl sm:text-3xl md:text-4xl",
-      headerSubtitle: "text-base sm:text-lg md:text-xl",
+      headerTitle: "text-sm sm:text-base md:text-lg",
+      headerSubtitle: "text-[10px] sm:text-xs md:text-sm",
       partySize: "text-[3.5rem] sm:text-[4rem] md:text-[4.5rem] lg:text-[5rem]",
       metaTextSize: "text-[8px] px-1 py-0.25",
       competitorText: "text-[9px] sm:text-[10px] md:text-xs",
       competitorPadding: "p-1 border-l",
       timerText: "text-[9px] sm:text-[10px]",
-      queueMaxHeight: "max-h-[60px]",
-        queueItemPadding: "p-0.5",
-        hideQueue: false,
+      queueMaxHeight: "max-h-[30px]",
+      queueItemPadding: "p-0.5",
+      hideQueue: true,
       hideFooter: true,
       onlyShowParty: false
     };

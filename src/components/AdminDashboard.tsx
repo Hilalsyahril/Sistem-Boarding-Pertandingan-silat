@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 
-import { X,  
+import { 
   Users, Settings, LogOut, Plus, Trash2, Edit2, ShieldAlert, CheckCircle, 
   UserPlus, RefreshCw, Layers, Award, UsersRound, HelpCircle, LayoutGrid,
   Play, Pause, RotateCcw, Tv, Clock, Timer, FileSpreadsheet, Upload, Download, Volume2, SkipForward, Square
@@ -18,25 +18,19 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
   const [jumlahArena, setJumlahArena] = useState<number>(3);
   const [config, setConfig] = useState<ConfigStatus | null>(null);
   const [filterStatus, setFilterStatus] = useState<"queue" | "done" | "all">("queue");
-  const [isAutoNextEnabled, setIsAutoNextEnabled] = useState<boolean>(false);
-  const [isFormModalOpen, setIsFormModalOpen] = useState<boolean>(false);
-  
-
-  
-
-  
+  const [autoNextMatch, setAutoNextMatch] = useState<boolean>(true);
 
   useEffect(() => {
-    const savedAutoNext = localStorage.getItem('isAutoNextEnabled');
+    const savedAutoNext = localStorage.getItem('autoNextMatch');
     if (savedAutoNext !== null) {
-      setIsAutoNextEnabled(savedAutoNext === 'true');
+      setAutoNextMatch(savedAutoNext === 'true');
     }
   }, []);
 
   const toggleAutoNextMatch = () => {
-    const newVal = !isAutoNextEnabled;
-    setIsAutoNextEnabled(newVal);
-    localStorage.setItem('isAutoNextEnabled', String(newVal));
+    const newVal = !autoNextMatch;
+    setAutoNextMatch(newVal);
+    localStorage.setItem('autoNextMatch', String(newVal));
   };
   
   // Form States - Pesilat
@@ -327,7 +321,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
   // Handler jika timer habis, akan dipanggil otomatis
   const handleTimeoutMatch = async (id: string) => {
     try {
-      const res = await fetch(`/api/pesilat/${id}/timeout?_method=PUT&autoNext=${isAutoNextEnabled}`, { method: 'POST' });
+      const res = await fetch(`/api/pesilat/${id}/timeout?_method=PUT&autoNext=${autoNextMatch}`, { method: 'POST' });
       if (res.ok) {
         await fetchInitialData(3, 1500, true);
       }
@@ -779,7 +773,6 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
     setGender(p.gender);
     setArena(p.arena);
     setTimerDuration(p.timer_duration || 120);
-    setIsFormModalOpen(true);
     
     // Scroll to form on mobile
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -865,7 +858,6 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
     setGender("Putra");
     setArena(1);
     setTimerDuration(120);
-    setIsFormModalOpen(false);
   };
 
   const filteredPesilatList = [...pesilatList]
@@ -990,19 +982,10 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
 
         {/* Tab 1: KELOLA PESILAT */}
         {activeTab === "pesilat" && (
-          <div className="flex flex-col gap-6">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
             
-            {/* Form Input Pesilat Modal */}
-            {isFormModalOpen && (
-              <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 overflow-y-auto">
-                <div className="bg-slate-900 border-2 border-slate-800 p-5 rounded-3xl shadow-2xl w-full max-w-lg my-auto ring-1 ring-white/5 relative">
-                  <button 
-                    type="button"
-                    onClick={resetFormPesilat} 
-                    className="absolute top-4 right-4 text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 p-2 rounded-full transition-colors"
-                  >
-                    <X className="w-5 h-5" />
-                  </button>
+            {/* Form Input Pesilat */}
+            <div className="lg:col-span-4 bg-slate-900 border-2 border-slate-800 p-5 rounded-3xl shadow-2xl h-fit ring-1 ring-white/5">
               <div className="flex items-center gap-2 mb-4">
                 <UserPlus className="w-5 h-5 text-indigo-400" />
                 <h3 className="text-base font-black text-white font-display uppercase tracking-wider">
@@ -1200,12 +1183,10 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                   )}
                 </div>
               </form>
-                </div>
-              </div>
-            )}
+            </div>
 
             {/* List Daftar Pesilat & Kontrol Gelanggang */}
-            <div className="flex flex-col gap-6 min-w-0">
+            <div className="lg:col-span-8 flex flex-col gap-6 min-w-0">
               
               {/* PANEL KONTROL GELANGGANG (LIVE CONTROL ROOM) */}
               <div className="bg-slate-900 border-2 border-slate-800 rounded-3xl p-5 shadow-2xl ring-1 ring-white/5">
@@ -1221,12 +1202,11 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                   </div>
                   <div className="flex items-center gap-3 w-full sm:w-auto bg-slate-950 px-3 py-2 rounded-xl border border-slate-800">
                     <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider whitespace-nowrap">Auto Next Partai by Timer</span>
-                    
                     <button 
                       onClick={toggleAutoNextMatch}
-                      className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none ${isAutoNextEnabled ? 'bg-emerald-500' : 'bg-slate-700'}`}
+                      className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none ${autoNextMatch ? 'bg-emerald-500' : 'bg-slate-700'}`}
                     >
-                      <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${isAutoNextEnabled ? 'translate-x-4' : 'translate-x-1'}`} />
+                      <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${autoNextMatch ? 'translate-x-4' : 'translate-x-1'}`} />
                     </button>
                   </div>
                 </div>
@@ -1422,12 +1402,6 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                   </div>
 
                   <div className="flex items-center gap-2 flex-wrap">
-                    <button
-                      onClick={() => setIsFormModalOpen(true)}
-                      className="bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-2 rounded-xl text-xs font-bold uppercase tracking-wider flex items-center gap-2 transition"
-                    >
-                      <UserPlus className="w-4 h-4" /> Tambah Pesilat
-                    </button>
                     {/* Hidden input file for Import */}
                     <input
                       type="file"
