@@ -218,9 +218,9 @@ export default function PublicDisplay() {
     
     let text = "";
     if (cleanNamaBiru !== "") {
-      text = `Partai ${p.nomor_partai || ""}, Gelanggang ${arenaNum}. ${cleanKategori} ${cleanGender} ${prefixKelas}. Sudut biru ${cleanNamaBiru} dari ${cleanKontingenBiru}, melawan sudut merah ${cleanNamaMerah} dari ${cleanKontingenMerah}. Bersiaplah.`;
+      text = `Partai ${p.nomor_partai || ""}, Gelanggang ${arenaNum}. ${cleanKategori} ${cleanGender} ${prefixKelas}. Sudut biru ${cleanNamaBiru} dari ${cleanKontingenBiru}, melawan sudut merah ${cleanNamaMerah} dari ${cleanKontingenMerah}. Segera mempersiapkan diri.`;
     } else {
-      text = `Partai ${p.nomor_partai || ""}, Gelanggang ${arenaNum}. ${cleanKategori} ${cleanGender} ${prefixKelas}. Pesilat ${cleanNamaMerah} dari ${cleanKontingenMerah}. Bersiaplah.`;
+      text = `Partai ${p.nomor_partai || ""}, Gelanggang ${arenaNum}. ${cleanKategori} ${cleanGender} ${prefixKelas}. Pesilat ${cleanNamaMerah} dari ${cleanKontingenMerah}. Segera mempersiapkan diri.`;
     }
 
     console.log("Enqueueing speech announcement:", text);
@@ -289,7 +289,8 @@ export default function PublicDisplay() {
         try {
           data = JSON.parse(textData);
         } catch (e) {
-          throw new Error("Invalid JSON response");
+          console.warn("API returned invalid JSON:", textData.substring(0, 50));
+          return;
         }
         if (Array.isArray(data) && data.length > 0) {
           for (const ann of data) {
@@ -446,7 +447,8 @@ export default function PublicDisplay() {
         try {
           data = JSON.parse(textData);
         } catch (e) {
-          throw new Error("Invalid JSON response");
+          console.warn("API returned invalid JSON:", textData.substring(0, 50));
+          return;
         }
         if (Array.isArray(data)) {
           setPesilatList(prev => {

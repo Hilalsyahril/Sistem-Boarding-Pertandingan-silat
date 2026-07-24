@@ -7,4 +7,4 @@ code = code.replace(
 );
 
 fs.writeFileSync('src/components/PublicDisplay.tsx', code);
-console.log("Patched 5!");
+console.log("Patched 6!");

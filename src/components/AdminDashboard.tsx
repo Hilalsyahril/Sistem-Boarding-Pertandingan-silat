@@ -162,9 +162,9 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
     
     let text = "";
     if (cleanNamaBiru !== "") {
-      text = `Partai ${p.nomor_partai || ""}, Gelanggang ${arenaNum}. ${cleanKategori} ${cleanGender} ${prefixKelas}. Sudut biru ${cleanNamaBiru} dari ${cleanKontingenBiru}, melawan sudut merah ${cleanNamaMerah} dari ${cleanKontingenMerah}. Bersiaplah.`;
+      text = `Partai ${p.nomor_partai || ""}, Gelanggang ${arenaNum}. ${cleanKategori} ${cleanGender} ${prefixKelas}. Sudut biru ${cleanNamaBiru} dari ${cleanKontingenBiru}, melawan sudut merah ${cleanNamaMerah} dari ${cleanKontingenMerah}. Segera mempersiapkan diri.`;
     } else {
-      text = `Partai ${p.nomor_partai || ""}, Gelanggang ${arenaNum}. ${cleanKategori} ${cleanGender} ${prefixKelas}. Pesilat ${cleanNamaMerah} dari ${cleanKontingenMerah}. Bersiaplah.`;
+      text = `Partai ${p.nomor_partai || ""}, Gelanggang ${arenaNum}. ${cleanKategori} ${cleanGender} ${prefixKelas}. Pesilat ${cleanNamaMerah} dari ${cleanKontingenMerah}. Segera mempersiapkan diri.`;
     }
 
     try {
@@ -261,25 +261,6 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
       }
     }
   };
-
-  
-  // Background polling to keep admin in sync with server timer
-  useEffect(() => {
-    const interval = setInterval(async () => {
-      try {
-        const res = await fetch(`/api/pesilat?_t=${Date.now()}`);
-        if (res.ok) {
-          const data = await res.json();
-          if (Array.isArray(data)) {
-            setPesilatList(data);
-          }
-        }
-      } catch (e) {
-        // ignore
-      }
-    }, 1500);
-    return () => clearInterval(interval);
-  }, []);
 
   
   // Background polling to keep admin in sync with server timer
