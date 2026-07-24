@@ -355,7 +355,16 @@ app.put("/api/pesilat/:id/timeout", async (req, res) => {
     const p = mapPesilat(updateRes.rows[0]);
 
     const all = await getPesilats();
-    const arenaMatches = all.filter(match => Number(match.arena) === Number(p.arena));
+    const arenaMatches = all.filter(match => Number(match.arena) === Number(p.arena)).sort((a, b) => {
+      const numA = parseFloat(a.nomor_partai);
+      const numB = parseFloat(b.nomor_partai);
+      const isNumA = !isNaN(numA) && isFinite(numA);
+      const isNumB = !isNaN(numB) && isFinite(numB);
+      if (isNumA && isNumB) return numA - numB;
+      if (isNumA) return -1;
+      if (isNumB) return 1;
+      return String(a.nomor_partai || "").localeCompare(String(b.nomor_partai || ""), undefined, { numeric: true, sensitivity: "base" });
+    });
     const currentIndex = arenaMatches.findIndex(match => match.id === id);
     if (req.query.autoNext !== "false" && currentIndex !== -1) {
       // Find the first match in the same arena after the current one that is not done and not playing
@@ -509,7 +518,16 @@ app.post("/api/arena/:arena/next", async (req, res) => {
   try {
     const arenaNum = parseInt(req.params.arena, 10);
     const all = await getPesilats();
-    const arenaMatches = all.filter(match => Number(match.arena) === arenaNum);
+    const arenaMatches = all.filter(match => Number(match.arena) === arenaNum).sort((a, b) => {
+      const numA = parseFloat(a.nomor_partai);
+      const numB = parseFloat(b.nomor_partai);
+      const isNumA = !isNaN(numA) && isFinite(numA);
+      const isNumB = !isNaN(numB) && isFinite(numB);
+      if (isNumA && isNumB) return numA - numB;
+      if (isNumA) return -1;
+      if (isNumB) return 1;
+      return String(a.nomor_partai || "").localeCompare(String(b.nomor_partai || ""), undefined, { numeric: true, sensitivity: "base" });
+    });
     
     // Find currently playing
     const currentPlaying = arenaMatches.find(m => m.is_playing);
