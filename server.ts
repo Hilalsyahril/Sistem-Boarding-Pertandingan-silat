@@ -82,6 +82,12 @@ async function initDb() {
       id VARCHAR(255) PRIMARY KEY,
       jumlah_arena INTEGER DEFAULT 3
     )`);
+  try {
+    await pgPool.query(`ALTER TABLE pengaturan_arena ADD COLUMN judul_aplikasi VARCHAR(255) DEFAULT 'SISTEM BOARDING PENCAK SILAT'`);
+    await pgPool.query(`ALTER TABLE pengaturan_arena ADD COLUMN auto_next BOOLEAN DEFAULT true`);
+  } catch(e) {
+    // ignore duplicate column
+  }
   await pgPool.query(`CREATE TABLE IF NOT EXISTS pesilat (
       id VARCHAR(255) PRIMARY KEY,
       nomor_partai VARCHAR(255),
@@ -139,15 +145,19 @@ function mapPesilat(row: any) {
   };
 }
 
-async function getJumlahArena() {
-  if (!pgPool) return 3;
-  const res = await pgPool.query("SELECT jumlah_arena FROM pengaturan_arena WHERE id = '00000000-0000-0000-0000-000000000001'");
-  return res.rows[0]?.jumlah_arena || 3;
+async function getPengaturanArena() {
+  if (!pgPool) return { jumlah_arena: 3, judul_aplikasi: 'SISTEM BOARDING PENCAK SILAT', auto_next: true };
+  const res = await pgPool.query("SELECT jumlah_arena, judul_aplikasi, auto_next FROM pengaturan_arena WHERE id = '00000000-0000-0000-0000-000000000001'");
+  return {
+    jumlah_arena: res.rows[0]?.jumlah_arena || 3,
+    judul_aplikasi: res.rows[0]?.judul_aplikasi || 'SISTEM BOARDING PENCAK SILAT',
+    auto_next: res.rows[0]?.auto_next !== undefined ? (res.rows[0].auto_next === 1 || res.rows[0].auto_next === true || res.rows[0].auto_next === 'true') : true
+  };
 }
 
-async function setJumlahArena(val: number) {
+async function setPengaturanArena(val: number, judul: string, autoNext: boolean) {
   if (!pgPool) return;
-  await pgPool.query("UPDATE pengaturan_arena SET jumlah_arena = $1 WHERE id = '00000000-0000-0000-0000-000000000001'", [val]);
+  await pgPool.query("UPDATE pengaturan_arena SET jumlah_arena = $1, judul_aplikasi = $2, auto_next = $3 WHERE id = '00000000-0000-0000-0000-000000000001'", [val, judul, autoNext]);
 }
 
 async function getPesilats() {
@@ -341,7 +351,9 @@ app.put("/api/pesilat/:id/timeout", async (req, res) => {
     
     // Atomic check-and-set to prevent race conditions from multiple clients triggering timeout concurrently
     
-    const autoNext = req.query.autoNext !== "false";
+    const pengaturan = await getPengaturanArena();
+    const dbAutoNext = pengaturan.auto_next;
+    const autoNext = (req.query.autoNext !== "false") && dbAutoNext;
     let queryStr = "";
     if (autoNext) {
       queryStr = "UPDATE pesilat SET is_playing = false, timer_running = false, is_done = true, timer_seconds_left = 0 WHERE id = $1 AND is_playing = true RETURNING *";
@@ -372,7 +384,7 @@ app.put("/api/pesilat/:id/timeout", async (req, res) => {
       return String(a.nomor_partai || "").localeCompare(String(b.nomor_partai || ""), undefined, { numeric: true, sensitivity: "base" });
     });
     const currentIndex = arenaMatches.findIndex(match => match.id === id);
-    if (req.query.autoNext !== "false" && currentIndex !== -1) {
+    if (autoNext && currentIndex !== -1) {
       // Find the first match in the same arena after the current one that is not done and not playing
       const nextMatch = arenaMatches.slice(currentIndex + 1).find(m => !m.is_done && !m.is_playing);
       if (nextMatch) {
@@ -429,14 +441,17 @@ app.post("/api/pesilat/delete-batch", async (req, res) => {
 
 app.get("/api/pengaturan_arena", async (req, res) => {
   try {
-    res.json([{ id: "00000000-0000-0000-0000-000000000001", jumlah_arena: await getJumlahArena() }]);
+    const config = await getPengaturanArena();
+    res.json([{ id: "00000000-0000-0000-0000-000000000001", ...config }]);
   } catch (error: any) { res.status(200).json({ error: error.message, is_500: true }); }
 });
 
 app.put("/api/pengaturan_arena", async (req, res) => {
   try {
-    await setJumlahArena(req.body.jumlah_arena || 3);
-    res.json({ id: "00000000-0000-0000-0000-000000000001", jumlah_arena: await getJumlahArena() });
+    const autoNext = req.body.auto_next !== undefined ? req.body.auto_next : true;
+    await setPengaturanArena(req.body.jumlah_arena || 3, req.body.judul_aplikasi || 'SISTEM BOARDING PENCAK SILAT', autoNext);
+    const config = await getPengaturanArena();
+    res.json({ id: "00000000-0000-0000-0000-000000000001", ...config });
   } catch (error: any) { res.status(200).json({ error: error.message, is_500: true }); }
 });
 

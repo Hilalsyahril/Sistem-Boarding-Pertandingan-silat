@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { 
   Users, Settings, LogOut, Plus, Trash2, Edit2, ShieldAlert, CheckCircle, 
   UserPlus, RefreshCw, Layers, Award, UsersRound, HelpCircle, LayoutGrid,
-  Play, Pause, RotateCcw, Tv, Clock, Timer, FileSpreadsheet, Upload, Download, Volume2, SkipForward, Square
+  Play, Pause, RotateCcw, Tv, Clock, Timer, FileSpreadsheet, Upload, Download, Volume2, SkipForward, Square, X
 } from "lucide-react";
 import * as XLSX from "xlsx";
 import { Pesilat, ConfigStatus } from "../types";
@@ -16,21 +16,30 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
   const [activeTab, setActiveTab] = useState<"pesilat" | "arena">("pesilat");
   const [pesilatList, setPesilatList] = useState<Pesilat[]>([]);
   const [jumlahArena, setJumlahArena] = useState<number>(3);
+  const [judulAplikasi, setJudulAplikasi] = useState<string>("SISTEM BOARDING PENCAK SILAT");
   const [config, setConfig] = useState<ConfigStatus | null>(null);
   const [filterStatus, setFilterStatus] = useState<"queue" | "done" | "all">("queue");
   const [autoNextMatch, setAutoNextMatch] = useState<boolean>(true);
+  const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
 
-  useEffect(() => {
-    const savedAutoNext = localStorage.getItem('autoNextMatch');
-    if (savedAutoNext !== null) {
-      setAutoNextMatch(savedAutoNext === 'true');
-    }
-  }, []);
+  // Form States - Arena Setting
+  const [inputJumlahArena, setInputJumlahArena] = useState<number>(3);
+  const [inputJudulAplikasi, setInputJudulAplikasi] = useState<string>("SISTEM BOARDING PENCAK SILAT");
 
-  const toggleAutoNextMatch = () => {
+  const toggleAutoNextMatch = async () => {
     const newVal = !autoNextMatch;
     setAutoNextMatch(newVal);
-    localStorage.setItem('autoNextMatch', String(newVal));
+    
+    // Update API
+    try {
+      await fetch("/api/pengaturan_arena", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ jumlah_arena: inputJumlahArena, judul_aplikasi: inputJudulAplikasi, auto_next: newVal })
+      });
+    } catch (e) {
+      console.warn("Gagal mengupdate auto_next");
+    }
   };
   
   // Form States - Pesilat
@@ -192,8 +201,6 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
     }
   };
 
-  // Form States - Arena Setting
-  const [inputJumlahArena, setInputJumlahArena] = useState<number>(3);
 
   // Status & Feedback States
   const [loading, setLoading] = useState<boolean>(false);
@@ -254,13 +261,20 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
       const pesilatData = await pesilatRes.json();
       setPesilatList(Array.isArray(pesilatData) ? pesilatData : []);
 
-      // Ambil Jumlah Arena
+      // Ambil Jumlah Arena & Judul
       const arenaRes = await fetch(`/api/pengaturan_arena?_t=${Date.now()}`);
       const arenaData = await arenaRes.json();
       const arenaItem = Array.isArray(arenaData) ? arenaData[0] : arenaData;
       const count = arenaItem && typeof arenaItem.jumlah_arena === "number" ? arenaItem.jumlah_arena : 3;
+      const judul = arenaItem?.judul_aplikasi || "SISTEM BOARDING PENCAK SILAT";
+      const dbAutoNext = arenaItem?.auto_next !== undefined ? arenaItem.auto_next : true;
+      
       setJumlahArena(count);
       setInputJumlahArena(count);
+      setJudulAplikasi(judul);
+      setInputJudulAplikasi(judul);
+      setAutoNextMatch(dbAutoNext);
+      
       if (!silent) setLoading(false);
     } catch (err: any) {
       console.error(`Gagal memuat data awal (${retriesLeft} sisa):`, err);
@@ -291,7 +305,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
       } catch (e) {
         // ignore
       }
-    }, 1500);
+    }, 3000);
     return () => clearInterval(interval);
   }, []);
 
@@ -762,6 +776,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
   // 3. Edit Handler - Masukkan ke Form
   const handleEditClick = (p: Pesilat) => {
     setIsEditMode(true);
+    setIsModalOpen(true);
     setPesilatId(p.id);
     setNomorPartai(p.nomor_partai || "");
     setNamaPesilat(p.nama_pesilat || "");
@@ -825,7 +840,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
     try {
       const res = await fetch("/api/pengaturan_arena?_method=PUT", { method: 'POST',
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ jumlah_arena: inputJumlahArena })
+        body: JSON.stringify({ jumlah_arena: inputJumlahArena, judul_aplikasi: inputJudulAplikasi, auto_next: autoNextMatch })
       });
 
       let data = {};
@@ -834,11 +849,12 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
       } catch (e) {}
 
       if (!res.ok) {
-        throw new Error((data as any).error || "Gagal memperbarui jumlah arena.");
+        throw new Error((data as any).error || "Gagal memperbarui pengaturan.");
       }
 
       setJumlahArena(inputJumlahArena);
-      setSuccess(`Pengaturan arena berhasil diperbarui menjadi ${inputJumlahArena} Gelanggang!`);
+      setJudulAplikasi(inputJudulAplikasi);
+      setSuccess(`Pengaturan arena berhasil diperbarui!`);
     } catch (err: any) {
       setError(err.message);
     }
@@ -847,6 +863,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
   // Helper reset
   const resetFormPesilat = () => {
     setIsEditMode(false);
+    setIsModalOpen(false);
     setPesilatId("");
     setNomorPartai("01");
     setNamaPesilat("");
@@ -982,211 +999,221 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
 
         {/* Tab 1: KELOLA PESILAT */}
         {activeTab === "pesilat" && (
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-            
-            {/* Form Input Pesilat */}
-            <div className="lg:col-span-4 bg-slate-900 border-2 border-slate-800 p-5 rounded-3xl shadow-2xl h-fit ring-1 ring-white/5">
-              <div className="flex items-center gap-2 mb-4">
-                <UserPlus className="w-5 h-5 text-indigo-400" />
-                <h3 className="text-base font-black text-white font-display uppercase tracking-wider">
-                  {isEditMode ? "Ubah Data Pesilat" : "Tambah Pesilat"}
-                </h3>
-              </div>
-
-              <form onSubmit={handleSubmitPesilat} className="space-y-4 text-xs sm:text-sm">
-                <div>
-                  <label className="block text-[10px] font-bold text-indigo-400 mb-1.5 uppercase tracking-widest font-mono">
-                    Nomor Partai / Pertandingan
-                  </label>
-                  <input
-                    type="text"
-                    value={nomorPartai}
-                    onChange={(e) => setNomorPartai(e.target.value)}
-                    placeholder="Contoh: 01, A-12, dll."
-                    className="w-full bg-slate-950 border border-slate-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-white rounded-xl px-3 py-2.5 outline-none transition font-bold"
-                    required
-                  />
-                </div>
-
-                {/* SUDUT BIRU GROUP */}
-                <div className="border-l-4 border-blue-500 pl-3 py-2.5 bg-blue-500/5 rounded-r-xl space-y-3">
-                  <div className="text-[10px] font-black text-blue-400 uppercase tracking-widest font-mono">
-                    SUDUT BIRU
-                  </div>
-                  <div>
-                    <label className="block text-[9px] font-bold text-slate-400 mb-1 uppercase tracking-widest font-mono">
-                      Nama Pesilat Biru
-                    </label>
-                    <input
-                      type="text"
-                      value={namaPesilatBiru}
-                      onChange={(e) => setNamaPesilatBiru(e.target.value)}
-                      placeholder="Nama lengkap atlet sudut biru (opsional)"
-                      className="w-full bg-slate-950 border border-slate-800 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-white rounded-xl px-3 py-2 outline-none transition"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-[9px] font-bold text-slate-400 mb-1 uppercase tracking-widest font-mono">
-                      Kontingen Biru
-                    </label>
-                    <input
-                      type="text"
-                      value={kontingenBiru}
-                      onChange={(e) => setKontingenBiru(e.target.value)}
-                      placeholder="Asal Kontingen / Perguruan (opsional)"
-                      className="w-full bg-slate-950 border border-slate-800 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-white rounded-xl px-3 py-2 outline-none transition"
-                    />
-                  </div>
-                </div>
-
-                {/* SUDUT MERAH GROUP */}
-                <div className="border-l-4 border-red-500 pl-3 py-2.5 bg-red-500/5 rounded-r-xl space-y-3">
-                  <div className="text-[10px] font-black text-red-400 uppercase tracking-widest font-mono">
-                    SUDUT MERAH
-                  </div>
-                  <div>
-                    <label className="block text-[9px] font-bold text-slate-400 mb-1 uppercase tracking-widest font-mono">
-                      Nama Pesilat Merah (Wajib)
-                    </label>
-                    <input
-                      type="text"
-                      value={namaPesilat}
-                      onChange={(e) => setNamaPesilat(e.target.value)}
-                      placeholder="Nama lengkap atlet sudut merah"
-                      className="w-full bg-slate-950 border border-slate-800 focus:border-red-500 focus:ring-1 focus:ring-red-500 text-white rounded-xl px-3 py-2 outline-none transition"
-                      required
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-[9px] font-bold text-slate-400 mb-1 uppercase tracking-widest font-mono">
-                      Kontingen Merah (Wajib)
-                    </label>
-                    <input
-                      type="text"
-                      value={kontingen}
-                      onChange={(e) => setKontingen(e.target.value)}
-                      placeholder="Asal Kontingen / Perguruan"
-                      className="w-full bg-slate-950 border border-slate-800 focus:border-red-500 focus:ring-1 focus:ring-red-500 text-white rounded-xl px-3 py-2 outline-none transition"
-                      required
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-[10px] font-bold text-slate-400 mb-1.5 uppercase tracking-widest font-mono">
-                      Gender
-                    </label>
-                    <select
-                      value={gender}
-                      onChange={(e) => setGender(e.target.value)}
-                      className="w-full bg-slate-950 border border-slate-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-white rounded-xl px-2 py-2.5 outline-none transition text-xs sm:text-sm"
-                    >
-                      {opsiGender.map((g) => (
-                        <option key={g} value={g}>{g}</option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-[10px] font-bold text-slate-400 mb-1.5 uppercase tracking-widest font-mono">
-                      Kategori
-                    </label>
-                    <select
-                      value={kategori}
-                      onChange={(e) => setKategori(e.target.value)}
-                      className="w-full bg-slate-950 border border-slate-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-white rounded-xl px-2 py-2.5 outline-none transition text-xs sm:text-sm"
-                    >
-                      {opsiKategori.map((k) => (
-                        <option key={k} value={k}>{k}</option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-[10px] font-bold text-slate-400 mb-1.5 uppercase tracking-widest font-mono">
-                    Kelas Tanding / Seni
-                  </label>
-                  <select
-                    value={kelas}
-                    onChange={(e) => setKelas(e.target.value)}
-                    className="w-full bg-slate-950 border border-slate-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-white rounded-xl px-2.5 py-2.5 outline-none transition text-xs sm:text-sm"
+          <>
+            {/* Modal Form Pesilat */}
+            {isModalOpen && (
+              <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm overflow-y-auto">
+                <div className="bg-slate-900 border-2 border-slate-800 p-5 rounded-3xl shadow-2xl w-full max-w-lg my-8 relative ring-1 ring-white/5">
+                  <button 
+                    onClick={resetFormPesilat}
+                    className="absolute top-5 right-5 text-slate-400 hover:text-white transition"
+                    title="Tutup"
                   >
-                    {opsiKelas.map((k) => (
-                      <option key={k} value={k}>{k}</option>
-                    ))}
-                  </select>
-                </div>
-
-                  <div>
-                  <label className="block text-[10px] font-bold text-slate-400 mb-1.5 uppercase tracking-widest font-mono">
-                    Durasi Pertandingan (jam:menit:detik)
-                  </label>
-                  <input
-                    type="text"
-                    value={timerInputStr}
-                    onChange={(e) => {
-                      setTimerInputStr(e.target.value);
-                      const secs = parseTimeToSeconds(e.target.value);
-                      setTimerDuration(secs);
-                    }}
-                    onFocus={() => setIsTimerInputFocused(true)}
-                    onBlur={() => {
-                      setIsTimerInputFocused(false);
-                      setTimerInputStr(formatSecondsToTime(timerDuration));
-                    }}
-                    placeholder="Contoh: 00:02:00 atau 02:00"
-                    className="w-full bg-slate-950 border border-slate-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-white rounded-xl px-3 py-2.5 outline-none transition font-bold"
-                    required
-                  />
-                  <p className="text-[10px] text-slate-500 mt-1 font-mono uppercase tracking-wide">
-                    Atur durasi kustom (Format: JJ:MM:DD / MM:DD). Tersimpan: {timerDuration} detik.
-                  </p>
-                </div>
-
-                <div>
-                  <label className="block text-[10px] font-bold text-slate-400 mb-1.5 uppercase tracking-widest font-mono">
-                    Ditempatkan di Arena (Gelanggang)
-                  </label>
-                  <select
-                    value={arena}
-                    onChange={(e) => setArena(Number(e.target.value))}
-                    className="w-full bg-slate-950 border border-slate-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-white rounded-xl px-2.5 py-2.5 outline-none transition font-semibold text-xs sm:text-sm"
-                  >
-                    {Array.from({ length: jumlahArena }, (_, i) => i + 1).map((num) => (
-                      <option key={num} value={num}>Gelanggang {num}</option>
-                    ))}
-                  </select>
-                  <p className="text-[10px] text-slate-500 mt-1 font-mono uppercase tracking-wide">
-                    Hanya menampilkan Gelanggang yang aktif.
-                  </p>
-                </div>
-
-                <div className="flex gap-2 pt-2">
-                  <button
-                    type="submit"
-                    className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-black py-2.5 rounded-xl transition text-xs uppercase tracking-wider font-display shadow-lg shadow-indigo-600/10"
-                  >
-                    {isEditMode ? "Simpan Perubahan" : "Simpan Pesilat"}
+                    <X className="w-6 h-6" />
                   </button>
-                  {isEditMode && (
-                    <button
-                      type="button"
-                      onClick={resetFormPesilat}
-                      className="bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold px-4 py-2.5 rounded-xl transition text-xs uppercase font-mono tracking-wider"
-                    >
-                      Batal
-                    </button>
-                  )}
+                  <div className="flex items-center gap-2 mb-4 pr-8">
+                    <UserPlus className="w-5 h-5 text-indigo-400" />
+                    <h3 className="text-base font-black text-white font-display uppercase tracking-wider">
+                      {isEditMode ? "Ubah Data Pesilat" : "Tambah Pesilat"}
+                    </h3>
+                  </div>
+
+                  <form onSubmit={handleSubmitPesilat} className="space-y-4 text-xs sm:text-sm">
+                    <div>
+                      <label className="block text-[10px] font-bold text-indigo-400 mb-1.5 uppercase tracking-widest font-mono">
+                        Nomor Partai / Pertandingan
+                      </label>
+                      <input
+                        type="text"
+                        value={nomorPartai}
+                        onChange={(e) => setNomorPartai(e.target.value)}
+                        placeholder="Contoh: 01, A-12, dll."
+                        className="w-full bg-slate-950 border border-slate-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-white rounded-xl px-3 py-2.5 outline-none transition font-bold"
+                        required
+                      />
+                    </div>
+
+                    {/* SUDUT BIRU GROUP */}
+                    <div className="border-l-4 border-blue-500 pl-3 py-2.5 bg-blue-500/5 rounded-r-xl space-y-3">
+                      <div className="text-[10px] font-black text-blue-400 uppercase tracking-widest font-mono">
+                        SUDUT BIRU
+                      </div>
+                      <div>
+                        <label className="block text-[9px] font-bold text-slate-400 mb-1 uppercase tracking-widest font-mono">
+                          Nama Pesilat Biru
+                        </label>
+                        <input
+                          type="text"
+                          value={namaPesilatBiru}
+                          onChange={(e) => setNamaPesilatBiru(e.target.value)}
+                          placeholder="Nama lengkap atlet sudut biru (opsional)"
+                          className="w-full bg-slate-950 border border-slate-800 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-white rounded-xl px-3 py-2 outline-none transition"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-[9px] font-bold text-slate-400 mb-1 uppercase tracking-widest font-mono">
+                          Kontingen Biru
+                        </label>
+                        <input
+                          type="text"
+                          value={kontingenBiru}
+                          onChange={(e) => setKontingenBiru(e.target.value)}
+                          placeholder="Asal Kontingen / Perguruan (opsional)"
+                          className="w-full bg-slate-950 border border-slate-800 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-white rounded-xl px-3 py-2 outline-none transition"
+                        />
+                      </div>
+                    </div>
+
+                    {/* SUDUT MERAH GROUP */}
+                    <div className="border-l-4 border-red-500 pl-3 py-2.5 bg-red-500/5 rounded-r-xl space-y-3">
+                      <div className="text-[10px] font-black text-red-400 uppercase tracking-widest font-mono">
+                        SUDUT MERAH
+                      </div>
+                      <div>
+                        <label className="block text-[9px] font-bold text-slate-400 mb-1 uppercase tracking-widest font-mono">
+                          Nama Pesilat Merah (Wajib)
+                        </label>
+                        <input
+                          type="text"
+                          value={namaPesilat}
+                          onChange={(e) => setNamaPesilat(e.target.value)}
+                          placeholder="Nama lengkap atlet sudut merah"
+                          className="w-full bg-slate-950 border border-slate-800 focus:border-red-500 focus:ring-1 focus:ring-red-500 text-white rounded-xl px-3 py-2 outline-none transition"
+                          required
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-[9px] font-bold text-slate-400 mb-1 uppercase tracking-widest font-mono">
+                          Kontingen Merah (Wajib)
+                        </label>
+                        <input
+                          type="text"
+                          value={kontingen}
+                          onChange={(e) => setKontingen(e.target.value)}
+                          placeholder="Asal Kontingen / Perguruan"
+                          className="w-full bg-slate-950 border border-slate-800 focus:border-red-500 focus:ring-1 focus:ring-red-500 text-white rounded-xl px-3 py-2 outline-none transition"
+                          required
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-400 mb-1.5 uppercase tracking-widest font-mono">
+                          Gender
+                        </label>
+                        <select
+                          value={gender}
+                          onChange={(e) => setGender(e.target.value)}
+                          className="w-full bg-slate-950 border border-slate-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-white rounded-xl px-2 py-2.5 outline-none transition text-xs sm:text-sm"
+                        >
+                          {opsiGender.map((g) => (
+                            <option key={g} value={g}>{g}</option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-400 mb-1.5 uppercase tracking-widest font-mono">
+                          Kategori
+                        </label>
+                        <select
+                          value={kategori}
+                          onChange={(e) => setKategori(e.target.value)}
+                          className="w-full bg-slate-950 border border-slate-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-white rounded-xl px-2 py-2.5 outline-none transition text-xs sm:text-sm"
+                        >
+                          {opsiKategori.map((k) => (
+                            <option key={k} value={k}>{k}</option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-400 mb-1.5 uppercase tracking-widest font-mono">
+                        Kelas Tanding / Seni
+                      </label>
+                      <select
+                        value={kelas}
+                        onChange={(e) => setKelas(e.target.value)}
+                        className="w-full bg-slate-950 border border-slate-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-white rounded-xl px-2.5 py-2.5 outline-none transition text-xs sm:text-sm"
+                      >
+                        {opsiKelas.map((k) => (
+                          <option key={k} value={k}>{k}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-400 mb-1.5 uppercase tracking-widest font-mono">
+                        Durasi Pertandingan (jam:menit:detik)
+                      </label>
+                      <input
+                        type="text"
+                        value={timerInputStr}
+                        onChange={(e) => {
+                          setTimerInputStr(e.target.value);
+                          const secs = parseTimeToSeconds(e.target.value);
+                          setTimerDuration(secs);
+                        }}
+                        onFocus={() => setIsTimerInputFocused(true)}
+                        onBlur={() => {
+                          setIsTimerInputFocused(false);
+                          setTimerInputStr(formatSecondsToTime(timerDuration));
+                        }}
+                        placeholder="Contoh: 00:02:00 atau 02:00"
+                        className="w-full bg-slate-950 border border-slate-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-white rounded-xl px-3 py-2.5 outline-none transition font-bold"
+                        required
+                      />
+                      <p className="text-[10px] text-slate-500 mt-1 font-mono uppercase tracking-wide">
+                        Atur durasi kustom (Format: JJ:MM:DD / MM:DD). Tersimpan: {timerDuration} detik.
+                      </p>
+                    </div>
+
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-400 mb-1.5 uppercase tracking-widest font-mono">
+                        Ditempatkan di Arena (Gelanggang)
+                      </label>
+                      <select
+                        value={arena}
+                        onChange={(e) => setArena(Number(e.target.value))}
+                        className="w-full bg-slate-950 border border-slate-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-white rounded-xl px-2.5 py-2.5 outline-none transition font-semibold text-xs sm:text-sm"
+                      >
+                        {Array.from({ length: jumlahArena }, (_, i) => i + 1).map((num) => (
+                          <option key={num} value={num}>Gelanggang {num}</option>
+                        ))}
+                      </select>
+                      <p className="text-[10px] text-slate-500 mt-1 font-mono uppercase tracking-wide">
+                        Hanya menampilkan Gelanggang yang aktif.
+                      </p>
+                    </div>
+
+                    <div className="flex gap-2 pt-2">
+                      <button
+                        type="submit"
+                        className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-black py-2.5 rounded-xl transition text-xs uppercase tracking-wider font-display shadow-lg shadow-indigo-600/10"
+                      >
+                        {isEditMode ? "Simpan Perubahan" : "Simpan Pesilat"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={resetFormPesilat}
+                        className="bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold px-4 py-2.5 rounded-xl transition text-xs uppercase font-mono tracking-wider"
+                      >
+                        Batal
+                      </button>
+                    </div>
+                  </form>
                 </div>
-              </form>
-            </div>
+              </div>
+            )}
+
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
 
             {/* List Daftar Pesilat & Kontrol Gelanggang */}
-            <div className="lg:col-span-8 flex flex-col gap-6 min-w-0">
+            <div className="lg:col-span-12 flex flex-col gap-6 min-w-0">
               
               {/* PANEL KONTROL GELANGGANG (LIVE CONTROL ROOM) */}
               <div className="bg-slate-900 border-2 border-slate-800 rounded-3xl p-5 shadow-2xl ring-1 ring-white/5">
@@ -1410,6 +1437,16 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                       accept=".xlsx, .xls"
                       className="hidden"
                     />
+
+                    {/* Tambah Pesilat Button */}
+                    <button
+                      onClick={() => { resetFormPesilat(); setIsModalOpen(true); }}
+                      className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 border border-indigo-500 rounded-xl text-white transition text-xs font-black flex items-center gap-1.5 cursor-pointer shadow-lg shadow-indigo-600/20"
+                      title="Tambah Data Pesilat Baru"
+                    >
+                      <UserPlus className="w-3.5 h-3.5 text-indigo-200" />
+                      <span>Tambah Pesilat</span>
+                    </button>
 
                     {/* Download Template Button */}
                     <button
@@ -1676,6 +1713,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
             </div>
 
           </div>
+          </>
         )}
 
         {/* Tab 2: PENGATURAN ARENA */}
@@ -1755,12 +1793,25 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                 </div>
               </div>
 
+              <div>
+                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 font-mono">
+                  Judul Aplikasi (Header Display Publik)
+                </label>
+                <input
+                  type="text"
+                  value={inputJudulAplikasi}
+                  onChange={(e) => setInputJudulAplikasi(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-800 focus:border-indigo-500 text-left font-bold text-sm text-white rounded-xl px-4 py-2.5 outline-none transition"
+                  placeholder="Misal: SISTEM BOARDING PENCAK SILAT"
+                />
+              </div>
+
               <div className="pt-2 border-t border-slate-800/50">
                 <button
                   type="submit"
                   className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-black py-3 rounded-xl transition text-xs uppercase tracking-wider font-display shadow-lg shadow-indigo-600/20"
                 >
-                  Perbarui Jumlah Arena Sekarang
+                  Simpan Pengaturan
                 </button>
               </div>
             </form>

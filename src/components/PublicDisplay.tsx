@@ -7,6 +7,7 @@ import { Pesilat, ConfigStatus } from "../types";
 export default function PublicDisplay() {
   const [pesilatList, setPesilatList] = useState<Pesilat[]>([]);
   const [jumlahArena, setJumlahArena] = useState<number>(3);
+  const [judulAplikasi, setJudulAplikasi] = useState<string>("SISTEM BOARDING PENCAK SILAT");
   const [config, setConfig] = useState<ConfigStatus | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
@@ -60,33 +61,6 @@ export default function PublicDisplay() {
     }
   };
 
-  const fetchTTS = async (item: any) => {
-    if (item.audioData || item.fetching || item.failed) return;
-    item.fetching = true;
-    try {
-      const controller = new AbortController();
-      const fetchTimeout = setTimeout(() => controller.abort(), 15000);
-      const res = await fetch("/api/tts", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: item.text }),
-        signal: controller.signal
-      });
-      clearTimeout(fetchTimeout);
-      if (!res.ok) throw new Error("TTS Backend failed");
-      const data = await res.json();
-      if (data.audio) {
-        item.audioData = data.audio;
-      } else {
-        throw new Error("No audio returned");
-      }
-    } catch(e) {
-      console.warn("TTS fetch failed, falling back to native browser TTS", e);
-      item.useNativeFallback = true;
-    }
-    processQueue();
-  };
-
   const processQueue = async () => {
     if (!isAudioEnabledRef.current) {
       speechQueueRef.current = [];
@@ -94,20 +68,11 @@ export default function PublicDisplay() {
       return;
     }
     if (speechQueueRef.current.length === 0) return;
-    
-    // Trigger background fetch for all items in queue
-    speechQueueRef.current.forEach(i => fetchTTS(i));
-
-    const current = speechQueueRef.current[0];
-    
-    // Wait for the current item to finish fetching
-    if (!current.audioData && !current.failed && !current.useNativeFallback) {
-      return;
-    }
 
     if (isSpeakingRef.current) return;
     isSpeakingRef.current = true;
 
+    const current = speechQueueRef.current[0];
     let isDone = false;
     let safetyTimeout: any;
 
@@ -115,83 +80,54 @@ export default function PublicDisplay() {
       if (isDone) return;
       isDone = true;
       if (safetyTimeout) clearTimeout(safetyTimeout);
-      if (resumeTimeout) clearTimeout(resumeTimeout);
       isSpeakingRef.current = false;
       if (speechQueueRef.current[0] === current) {
         speechQueueRef.current.shift();
       }
       setTimeout(() => {
         processQueue();
-      }, 150);
+      }, 500);
     };
 
-    let resumeTimeout: any;
     try {
-      // Set a hard timeout in case any await (like resume) hangs indefinitely
-      resumeTimeout = setTimeout(() => {
-        console.warn("Audio processing hung, forcing finish");
-        finishUtterance();
-      }, 20000);
-
-      if (current.useNativeFallback) {
-        if ('speechSynthesis' in window) {
-          const utterance = new SpeechSynthesisUtterance(current.text);
-          utterance.lang = 'id-ID';
-          
-          // Try to find Indonesian voice
-          const voices = window.speechSynthesis.getVoices();
-          const idVoice = voices.find(v => v.lang.includes('id') || v.lang.includes('ID'));
-          if (idVoice) utterance.voice = idVoice;
-
-          utterance.onend = () => finishUtterance();
-          utterance.onerror = (e) => {
-            console.warn("Native TTS error", e);
-            finishUtterance();
-          };
-          window.speechSynthesis.speak(utterance);
-          
-          // Safety timeout
-          safetyTimeout = setTimeout(() => finishUtterance(), 15000);
-          return;
-        } else {
-          throw new Error("Native Web Speech API not supported");
+      if ('speechSynthesis' in window) {
+        const utterance = new SpeechSynthesisUtterance(current.text);
+        utterance.lang = 'id-ID';
+        
+        const voices = window.speechSynthesis.getVoices();
+        
+        // Priority 1: explicitly indonesian + female / cewek / perempuan
+        let idVoice = voices.find(v => 
+          (v.lang.includes('id') || v.lang.includes('ID')) && 
+          (v.name.toLowerCase().includes('female') || v.name.toLowerCase().includes('perempuan') || v.name.toLowerCase().includes('cewek') || v.name.toLowerCase().includes('google bahasa indonesia'))
+        );
+        
+        // Priority 2: any indonesian voice
+        if (!idVoice) {
+          idVoice = voices.find(v => v.lang.includes('id') || v.lang.includes('ID'));
         }
-      }
+        
+        if (idVoice) {
+          utterance.voice = idVoice;
+        }
 
-      if (current.failed || !current.audioData) throw new Error("Audio data not available");
+        // Slight adjustments for more natural voice if possible
+        utterance.rate = 0.9;
+        utterance.pitch = 1.1;
 
-      if (!globalAudioCtx) {
-        const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
-        globalAudioCtx = new AudioContextClass();
-      }
-      if (globalAudioCtx.state === 'suspended') {
-        await globalAudioCtx.resume();
-      }
-      const audioCtx = globalAudioCtx;
-      
-      const binaryString = atob(current.audioData);
-      const bytes = new Uint8Array(binaryString.length);
-      for (let i = 0; i < binaryString.length; i++) {
-        bytes[i] = binaryString.charCodeAt(i);
-      }
-      
-      // Decode MP3 audio data
-      const audioBuffer = await audioCtx.decodeAudioData(bytes.buffer);
-      
-      const source = audioCtx.createBufferSource();
-      activeSourceRef.current = source;
-      source.buffer = audioBuffer;
-      // Normal tempo
-      source.connect(audioCtx.destination);
-      source.onended = () => {
-        finishUtterance();
-      };
-      
-      const durationMs = (audioBuffer.length / audioBuffer.sampleRate) * 1000;
-      safetyTimeout = setTimeout(() => finishUtterance(), durationMs + 5000); // 5000ms generous padding
+        utterance.onend = () => finishUtterance();
+        utterance.onerror = (e) => {
+          console.warn("Native TTS error", e);
+          finishUtterance();
+        };
 
-      source.start();
-
+        window.speechSynthesis.speak(utterance);
+        
+        // Safety timeout in case onend never fires
+        safetyTimeout = setTimeout(() => finishUtterance(), 20000);
+      } else {
+        throw new Error("Native Web Speech API not supported");
+      }
     } catch (err) {
       console.warn("TTS failed:", err);
       finishUtterance();
@@ -305,7 +241,7 @@ export default function PublicDisplay() {
       } catch (err) {
         if (err.message !== "Failed to fetch") console.error("Gagal memuat pengumuman:", err);
       }
-    }, 2000);
+    }, 3000);
     return () => clearInterval(interval);
   }, [isAudioEnabled]);
 
@@ -358,6 +294,9 @@ export default function PublicDisplay() {
       const arenaData = await arenaRes.json();
       const initialArenasCount = parseJumlahArena(arenaData);
       setJumlahArena(initialArenasCount);
+      if (arenaData && arenaData.length > 0 && arenaData[0].judul_aplikasi) {
+        setJudulAplikasi(arenaData[0].judul_aplikasi);
+      }
 
       // Ambil data pesilat awal
       const pesilatRes = await fetch(`/api/pesilat?_t=${Date.now()}`);
@@ -435,7 +374,7 @@ export default function PublicDisplay() {
     console.log("Menjalankan failsafe background polling untuk kestabilan display...");
     fallbackInterval = setInterval(() => {
       fetchLatestDataFallback();
-    }, 500); // Polling setiap 500ms untuk respon lebih cepat
+    }, 2000); // Polling setiap 2 detik untuk menghindari rate limit 429
 
     // Fungsi untuk mengambil pesilat terbaru (digunakan oleh real-time callback)
     async function fetchLatestPesilat() {
@@ -493,6 +432,9 @@ export default function PublicDisplay() {
         }
         
         setJumlahArena(parseJumlahArena(arenaData));
+        if (arenaData && arenaData.length > 0 && arenaData[0].judul_aplikasi) {
+          setJudulAplikasi(arenaData[0].judul_aplikasi);
+        }
         setLastUpdated(new Date());
       } catch (err) {
         console.log("Gagal melakukan polling data fallback:", err);
@@ -547,8 +489,8 @@ export default function PublicDisplay() {
         gridRows: "grid-rows-1",
         cardPadding: "p-4 sm:p-5 gap-3 sm:gap-4",
         headerPadding: "p-3 sm:p-4",
-        headerTitle: "text-3xl sm:text-4xl md:text-5xl",
-        headerSubtitle: "text-lg sm:text-xl md:text-2xl",
+        headerTitle: "text-4xl sm:text-5xl md:text-6xl",
+        headerSubtitle: "text-xl sm:text-2xl md:text-3xl",
         partySize: "text-[9rem] sm:text-[11rem] md:text-[13rem] lg:text-[16rem]",
         metaTextSize: "text-xs sm:text-sm px-2.5 py-1",
         competitorText: "text-base sm:text-lg md:text-xl font-bold",
@@ -567,8 +509,8 @@ export default function PublicDisplay() {
         gridRows: "grid-rows-2 md:grid-rows-1",
         cardPadding: "p-3 sm:p-4 gap-2.5 sm:gap-3",
         headerPadding: "p-2.5 sm:p-3",
-        headerTitle: "text-2xl sm:text-3xl md:text-4xl",
-        headerSubtitle: "text-base sm:text-lg md:text-xl",
+        headerTitle: "text-3xl sm:text-4xl md:text-5xl",
+        headerSubtitle: "text-lg sm:text-xl md:text-2xl",
         partySize: "text-[7rem] sm:text-[8.5rem] md:text-[10rem] lg:text-[12rem]",
         metaTextSize: "text-[10px] sm:text-xs px-2 py-0.5",
         competitorText: "text-sm sm:text-base md:text-lg",
@@ -587,8 +529,8 @@ export default function PublicDisplay() {
         gridRows: "grid-rows-3 md:grid-rows-1",
         cardPadding: "p-2 sm:p-3 gap-2",
         headerPadding: "p-2 sm:p-2.5",
-        headerTitle: "text-xl sm:text-2xl md:text-3xl",
-        headerSubtitle: "text-sm sm:text-base md:text-lg",
+        headerTitle: "text-2xl sm:text-3xl md:text-4xl",
+        headerSubtitle: "text-base sm:text-lg md:text-xl",
         partySize: "text-[5.5rem] sm:text-[6.5rem] md:text-[7.5rem] lg:text-[8.5rem]",
         metaTextSize: "text-[9px] sm:text-[10px] px-1.5 py-0.5",
         competitorText: "text-xs sm:text-sm md:text-base",
@@ -675,7 +617,7 @@ export default function PublicDisplay() {
         <div className="flex items-center gap-3">
           <div>
             <h1 className="text-sm sm:text-base md:text-lg font-black tracking-tight uppercase text-white font-display">
-              SISTEM BOARDING <span className="text-white">PENCAK SILAT</span>
+              {judulAplikasi}
             </h1>
             <p className="text-amber-100 text-[8px] sm:text-[10px] font-semibold tracking-widest uppercase">
               Live Boarding System • Real-time Monitoring
@@ -784,7 +726,7 @@ export default function PublicDisplay() {
 
               // Atlet lain di arena ini yang tidak is_playing dan belum selesai dianggap daftar tunggu (antrean)
               const waitingQueue = pesilatInArena
-                .filter(p => !p.is_playing && !p.is_done && p.timer_seconds_left > 0)
+                .filter(p => !p.is_playing && !p.is_done)
                 .sort((a, b) => {
                   const numA = parseFloat(a.nomor_partai);
                   const numB = parseFloat(b.nomor_partai);
