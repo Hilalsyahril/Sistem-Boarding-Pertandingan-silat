@@ -369,6 +369,26 @@ app.put("/api/pesilat/:id/timeout", async (req, res) => {
   } catch (error: any) { res.status(200).json({ error: error.message, is_500: true }); }
 });
 
+
+app.put("/api/pesilat/timer-all", async (req, res) => {
+  try {
+    const { timer_running } = req.body;
+    if (pgPool) {
+      if (timer_running) {
+        await pgPool.query(
+          "UPDATE pesilat SET timer_running = true, timer_last_updated_at = $1 WHERE is_playing = true",
+          [Date.now()]
+        );
+      } else {
+        await pgPool.query(
+          "UPDATE pesilat SET timer_running = false WHERE is_playing = true"
+        );
+      }
+    }
+    res.json({ success: true });
+  } catch (error: any) { res.status(200).json({ error: error.message, is_500: true }); }
+});
+
 app.delete("/api/pesilat/:id", async (req, res) => {
   try {
     await deletePesilat(req.params.id);
