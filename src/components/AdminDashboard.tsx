@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 
-import { 
+import { X,  
   Users, Settings, LogOut, Plus, Trash2, Edit2, ShieldAlert, CheckCircle, 
   UserPlus, RefreshCw, Layers, Award, UsersRound, HelpCircle, LayoutGrid,
   Play, Pause, RotateCcw, Tv, Clock, Timer, FileSpreadsheet, Upload, Download, Volume2, SkipForward, Square
@@ -19,6 +19,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
   const [config, setConfig] = useState<ConfigStatus | null>(null);
   const [filterStatus, setFilterStatus] = useState<"queue" | "done" | "all">("queue");
   const [isAutoNextEnabled, setIsAutoNextEnabled] = useState<boolean>(false);
+  const [isFormModalOpen, setIsFormModalOpen] = useState<boolean>(false);
   const [autoNextCountdown, setAutoNextCountdown] = useState<number>(60);
   const countdownIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const pesilatListRef = useRef<Pesilat[]>([]);
@@ -837,6 +838,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
     setGender(p.gender);
     setArena(p.arena);
     setTimerDuration(p.timer_duration || 120);
+    setIsFormModalOpen(true);
     
     // Scroll to form on mobile
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -922,6 +924,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
     setGender("Putra");
     setArena(1);
     setTimerDuration(120);
+    setIsFormModalOpen(false);
   };
 
   const filteredPesilatList = [...pesilatList]
@@ -1046,10 +1049,19 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
 
         {/* Tab 1: KELOLA PESILAT */}
         {activeTab === "pesilat" && (
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+          <div className="flex flex-col gap-6">
             
-            {/* Form Input Pesilat */}
-            <div className="lg:col-span-4 bg-slate-900 border-2 border-slate-800 p-5 rounded-3xl shadow-2xl h-fit ring-1 ring-white/5">
+            {/* Form Input Pesilat Modal */}
+            {isFormModalOpen && (
+              <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 overflow-y-auto">
+                <div className="bg-slate-900 border-2 border-slate-800 p-5 rounded-3xl shadow-2xl w-full max-w-lg my-auto ring-1 ring-white/5 relative">
+                  <button 
+                    type="button"
+                    onClick={resetFormPesilat} 
+                    className="absolute top-4 right-4 text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 p-2 rounded-full transition-colors"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
               <div className="flex items-center gap-2 mb-4">
                 <UserPlus className="w-5 h-5 text-indigo-400" />
                 <h3 className="text-base font-black text-white font-display uppercase tracking-wider">
@@ -1247,10 +1259,12 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                   )}
                 </div>
               </form>
-            </div>
+                </div>
+              </div>
+            )}
 
             {/* List Daftar Pesilat & Kontrol Gelanggang */}
-            <div className="lg:col-span-8 flex flex-col gap-6 min-w-0">
+            <div className="flex flex-col gap-6 min-w-0">
               
               {/* PANEL KONTROL GELANGGANG (LIVE CONTROL ROOM) */}
               <div className="bg-slate-900 border-2 border-slate-800 rounded-3xl p-5 shadow-2xl ring-1 ring-white/5">
@@ -1471,6 +1485,12 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                   </div>
 
                   <div className="flex items-center gap-2 flex-wrap">
+                    <button
+                      onClick={() => setIsFormModalOpen(true)}
+                      className="bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-2 rounded-xl text-xs font-bold uppercase tracking-wider flex items-center gap-2 transition"
+                    >
+                      <UserPlus className="w-4 h-4" /> Tambah Pesilat
+                    </button>
                     {/* Hidden input file for Import */}
                     <input
                       type="file"
