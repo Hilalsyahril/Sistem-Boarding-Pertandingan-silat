@@ -18,6 +18,20 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
   const [jumlahArena, setJumlahArena] = useState<number>(3);
   const [config, setConfig] = useState<ConfigStatus | null>(null);
   const [filterStatus, setFilterStatus] = useState<"queue" | "done" | "all">("queue");
+  const [autoNextMatch, setAutoNextMatch] = useState<boolean>(true);
+
+  useEffect(() => {
+    const savedAutoNext = localStorage.getItem('autoNextMatch');
+    if (savedAutoNext !== null) {
+      setAutoNextMatch(savedAutoNext === 'true');
+    }
+  }, []);
+
+  const toggleAutoNextMatch = () => {
+    const newVal = !autoNextMatch;
+    setAutoNextMatch(newVal);
+    localStorage.setItem('autoNextMatch', String(newVal));
+  };
   
   // Form States - Pesilat
   const [pesilatId, setPesilatId] = useState<string>(""); // Hanya untuk edit
@@ -307,7 +321,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
   // Handler jika timer habis, akan dipanggil otomatis
   const handleTimeoutMatch = async (id: string) => {
     try {
-      const res = await fetch(`/api/pesilat/${id}/timeout?_method=PUT`, { method: 'POST' });
+      const res = await fetch(`/api/pesilat/${id}/timeout?_method=PUT&autoNext=${autoNextMatch}`, { method: 'POST' });
       if (res.ok) {
         await fetchInitialData(3, 1500, true);
       }
@@ -661,6 +675,17 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
   };
 
   // 2. Submit Form Pesilat (Add / Update)
+
+  const handleNextPartai = async (arena: number) => {
+    try {
+      const res = await fetch(`/api/arena/${arena}/next`, { method: "POST" });
+      if (res.ok) {
+        await fetchInitialData(3, 1500, true);
+      }
+    } catch (err) {
+      console.error("Gagal lanjut partai berikutnya:", err);
+    }
+  };
 
   const handleTimerAll = async (timer_running: boolean) => {
     try {
@@ -1175,9 +1200,14 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                       <p className="text-[10px] text-slate-400">Kelola dan pantau partai yang sedang tampil secara langsung</p>
                     </div>
                   </div>
-                  <div className="flex gap-2 w-full sm:w-auto">
-                     <button onClick={() => handleTimerAll(false)} className="flex-1 sm:flex-none bg-slate-800 hover:bg-slate-700 text-slate-300 text-[10px] px-3 py-1.5 rounded font-bold uppercase tracking-wider transition-colors">Matikan Timer All</button>
-                     <button onClick={() => handleTimerAll(true)} className="flex-1 sm:flex-none bg-indigo-600/30 hover:bg-indigo-600/50 text-indigo-300 border border-indigo-500/30 text-[10px] px-3 py-1.5 rounded font-bold uppercase tracking-wider transition-colors">Nyalakan Timer All</button>
+                  <div className="flex items-center gap-3 w-full sm:w-auto bg-slate-950 px-3 py-2 rounded-xl border border-slate-800">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider whitespace-nowrap">Auto Next Partai by Timer</span>
+                    <button 
+                      onClick={toggleAutoNextMatch}
+                      className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none ${autoNextMatch ? 'bg-emerald-500' : 'bg-slate-700'}`}
+                    >
+                      <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${autoNextMatch ? 'translate-x-4' : 'translate-x-1'}`} />
+                    </button>
                   </div>
                 </div>
 
@@ -1293,6 +1323,15 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                                   <span className="hidden sm:inline">PANGGIL</span>
                                 </button>
 
+                                {/* Next Partai */}
+                                <button
+                                  onClick={() => handleNextPartai(arenaNum)}
+                                  className="p-1.5 bg-blue-600/20 hover:bg-blue-600/35 text-blue-400 border border-blue-600/30 rounded-lg transition cursor-pointer text-[10px] font-black font-mono tracking-widest uppercase px-2.5 py-1"
+                                  title="Ganti ke Partai Berikutnya di Gelanggang Ini"
+                                >
+                                  NEXT
+                                </button>
+
                                 {/* Stop Display */}
                                 <button
                                   onClick={() => handleStopMatch(activePesilat.id)}
@@ -1332,9 +1371,15 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                             </div>
                           </div>
                         ) : (
-                          <div className="py-6 text-center text-slate-600 font-mono text-[10px] border border-dashed border-slate-800 rounded-xl">
+                          <div className="py-6 text-center text-slate-600 font-mono text-[10px] border border-dashed border-slate-800 rounded-xl flex flex-col items-center justify-center gap-2">
                             <p>Gelanggang Standby.</p>
-                            <p className="text-[9px] text-slate-500 mt-1">Aktifkan atlet dengan menekan tombol <strong className="text-indigo-400">TAMPIL</strong> pada daftar di bawah.</p>
+                            <button
+                              onClick={() => handleNextPartai(arenaNum)}
+                              className="px-3 py-1.5 bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/30 rounded-lg font-bold transition-colors uppercase tracking-wider"
+                            >
+                              Mulai Partai Berikutnya
+                            </button>
+                            <p className="text-[9px] text-slate-500 mt-1">Atau aktifkan atlet dari tombol <strong className="text-indigo-400">TAMPIL</strong> di bawah.</p>
                           </div>
                         )}
                       </div>
