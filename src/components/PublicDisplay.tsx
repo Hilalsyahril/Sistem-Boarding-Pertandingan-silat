@@ -81,8 +81,8 @@ export default function PublicDisplay() {
         throw new Error("No audio returned");
       }
     } catch(e) {
-      console.warn("TTS fetch failed, falling back to native browser TTS", e);
-      item.useNativeFallback = true;
+      console.warn("TTS fetch failed", e);
+      item.failed = true;
     }
     processQueue();
   };
@@ -101,7 +101,7 @@ export default function PublicDisplay() {
     const current = speechQueueRef.current[0];
     
     // Wait for the current item to finish fetching
-    if (!current.audioData && !current.failed && !current.useNativeFallback) {
+    if (!current.audioData && !current.failed) {
       return;
     }
 
@@ -132,31 +132,6 @@ export default function PublicDisplay() {
         console.warn("Audio processing hung, forcing finish");
         finishUtterance();
       }, 20000);
-
-      if (current.useNativeFallback) {
-        if ('speechSynthesis' in window) {
-          const utterance = new SpeechSynthesisUtterance(current.text);
-          utterance.lang = 'id-ID';
-          
-          // Try to find Indonesian voice
-          const voices = window.speechSynthesis.getVoices();
-          const idVoice = voices.find(v => v.lang.includes('id') || v.lang.includes('ID'));
-          if (idVoice) utterance.voice = idVoice;
-
-          utterance.onend = () => finishUtterance();
-          utterance.onerror = (e) => {
-            console.warn("Native TTS error", e);
-            finishUtterance();
-          };
-          window.speechSynthesis.speak(utterance);
-          
-          // Safety timeout
-          safetyTimeout = setTimeout(() => finishUtterance(), 15000);
-          return;
-        } else {
-          throw new Error("Native Web Speech API not supported");
-        }
-      }
 
       if (current.failed || !current.audioData) throw new Error("Audio data not available");
 
@@ -614,9 +589,9 @@ export default function PublicDisplay() {
         competitorText: "text-[10px] sm:text-xs md:text-sm",
         competitorPadding: "p-1 sm:p-1.5 border-l-2",
         timerText: "text-[10px] sm:text-xs md:text-sm",
-        queueMaxHeight: "max-h-[30px]",
+        queueMaxHeight: "max-h-[60px]",
         queueItemPadding: "p-0.5",
-        hideQueue: true,
+        hideQueue: false,
         hideFooter: true,
         onlyShowParty: false
       };
@@ -638,9 +613,9 @@ export default function PublicDisplay() {
         competitorText: "text-[9px]",
         competitorPadding: "p-1 border-l",
         timerText: "text-[9px]",
-        queueMaxHeight: "max-h-[20px]",
+        queueMaxHeight: "max-h-[40px]",
         queueItemPadding: "p-0.5",
-        hideQueue: true,
+        hideQueue: false,
         hideFooter: true,
         onlyShowParty: true
       };
@@ -658,9 +633,9 @@ export default function PublicDisplay() {
       competitorText: "text-[9px] sm:text-[10px] md:text-xs",
       competitorPadding: "p-1 border-l",
       timerText: "text-[9px] sm:text-[10px]",
-      queueMaxHeight: "max-h-[30px]",
-      queueItemPadding: "p-0.5",
-      hideQueue: true,
+      queueMaxHeight: "max-h-[60px]",
+        queueItemPadding: "p-0.5",
+        hideQueue: false,
       hideFooter: true,
       onlyShowParty: false
     };
@@ -842,7 +817,7 @@ export default function PublicDisplay() {
                           <div className="mt-3 sm:mt-4 w-full max-w-xs text-left bg-slate-950/40 border border-slate-850 rounded-xl p-2 sm:p-3">
                             <p className="text-[8px] sm:text-[9px] font-bold text-indigo-400 font-mono uppercase tracking-wider mb-1">Partai Terjadwal:</p>
                             <div className="space-y-1">
-                              {waitingQueue.slice(0, 2).map((item) => (
+                              {waitingQueue.slice(0, 3).map((item) => (
                                 <div key={item.id} className="text-[9px] sm:text-xs flex justify-between text-slate-300 font-medium truncate">
                                   <span className="truncate">P-{item.nomor_partai} • {item.nama_pesilat}</span>
                                   <span className="text-[8px] sm:text-[9px] text-indigo-400 font-mono uppercase shrink-0 ml-1">G-{item.arena}</span>
@@ -987,7 +962,7 @@ export default function PublicDisplay() {
                               Tidak ada antrean berikutnya.
                             </div>
                           ) : (
-                            waitingQueue.slice(0, 2).map((pesilat) => (
+                            waitingQueue.slice(0, 3).map((pesilat) => (
                               <div 
                                 key={pesilat.id} 
                                 className={`bg-slate-950/20 ${layout.queueItemPadding} rounded flex justify-between items-center text-[7px] sm:text-[8px] border border-white/5`}
