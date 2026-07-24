@@ -340,10 +340,16 @@ app.put("/api/pesilat/:id/timeout", async (req, res) => {
     if (!pgPool) return res.status(200).json({ error: "Database not connected", is_500: true });
     
     // Atomic check-and-set to prevent race conditions from multiple clients triggering timeout concurrently
-    const updateRes = await pgPool.query(
-      "UPDATE pesilat SET is_playing = false, timer_running = false, is_done = true, timer_seconds_left = 0 WHERE id = $1 AND is_playing = true RETURNING *",
-      [id]
-    );
+    
+    const autoNext = req.query.autoNext !== "false";
+    let queryStr = "";
+    if (autoNext) {
+      queryStr = "UPDATE pesilat SET is_playing = false, timer_running = false, is_done = true, timer_seconds_left = 0 WHERE id = $1 AND is_playing = true RETURNING *";
+    } else {
+      queryStr = "UPDATE pesilat SET timer_running = false, timer_seconds_left = 0 WHERE id = $1 AND is_playing = true RETURNING *";
+    }
+    const updateRes = await pgPool.query(queryStr, [id]);
+
 
     if (updateRes.rowCount === 0) {
       // Already processed or not playing

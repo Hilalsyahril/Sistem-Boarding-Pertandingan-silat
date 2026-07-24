@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { 
   Users, Settings, LogOut, Plus, Trash2, Edit2, ShieldAlert, CheckCircle, 
   UserPlus, RefreshCw, Layers, Award, UsersRound, HelpCircle, LayoutGrid,
-  Play, Pause, RotateCcw, Tv, Clock, Timer, FileSpreadsheet, Upload, Download, Volume2, SkipForward
+  Play, Pause, RotateCcw, Tv, Clock, Timer, FileSpreadsheet, Upload, Download, Volume2, SkipForward, Square
 } from "lucide-react";
 import * as XLSX from "xlsx";
 import { Pesilat, ConfigStatus } from "../types";
