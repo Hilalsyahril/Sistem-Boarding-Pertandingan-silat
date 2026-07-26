@@ -108,11 +108,15 @@ export default function PublicDisplay() {
 
     const playFallbackTTS = () => {
       try {
-        const url = `https://translate.googleapis.com/translate_tts?client=gtx&ie=UTF-8&tl=id&q=${encodeURIComponent(current.text)}`;
-        const audio = audioRef.current || new Audio(url);
-        if (audioRef.current) {
+        const url = `https://translate.googleapis.com/translate_tts?client=tw-ob&ie=UTF-8&tl=id&q=${encodeURIComponent(current.text)}`;
+        const audio = audioRef.current;
+        if (audio) {
             audio.src = url;
             audio.volume = 1;
+            audio.load();
+        } else {
+            finishUtterance();
+            return;
         }
         activeSourceRef.current = audio;
         audio.onended = () => finishUtterance();
@@ -120,13 +124,21 @@ export default function PublicDisplay() {
           console.warn("Fallback TTS error", e);
           finishUtterance();
         };
-        const playPromise = audio.play();
-        if (playPromise !== undefined) {
-            playPromise.catch(e => {
-                console.warn("Fallback TTS play failed", e);
+        
+        setTimeout(() => {
+            try {
+                const playPromise = audio.play();
+                if (playPromise !== undefined) {
+                    playPromise.catch(e => {
+                        console.warn("Fallback TTS play failed", e);
+                        finishUtterance();
+                    });
+                }
+            } catch (e) {
                 finishUtterance();
-            });
-        }
+            }
+        }, 150);
+
         if (safetyTimeout) clearTimeout(safetyTimeout);
         safetyTimeout = setTimeout(() => finishUtterance(), 20000);
       } catch (err) {
@@ -135,7 +147,9 @@ export default function PublicDisplay() {
     };
 
     try {
-      if ('speechSynthesis' in window && window.speechSynthesis.getVoices().length > 0) {
+      const isTizen = navigator.userAgent.toLowerCase().includes('tizen');
+      
+      if (!isTizen && 'speechSynthesis' in window && window.speechSynthesis.getVoices().length > 0) {
         const utterance = new SpeechSynthesisUtterance(current.text);
         utterance.lang = 'id-ID';
         
