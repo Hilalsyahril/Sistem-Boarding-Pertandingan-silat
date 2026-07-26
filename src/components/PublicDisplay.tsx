@@ -36,6 +36,7 @@ export default function PublicDisplay() {
   const speechQueueRef = useRef<{ text: string; arenaNum: number; pesilatId: string }[]>([]);
   const isSpeakingRef = useRef<boolean>(false);
   const activeSourceRef = useRef<any>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
 
   // Removed auto-unlock to comply with browser audio policies
   useEffect(() => {
@@ -47,7 +48,7 @@ export default function PublicDisplay() {
   const handleInteraction = () => {
     setHasInteracted(true);
     
-    // Unlock Web Audio API
+    // Unlock Web Audio API & HTML5 Audio
     try {
       const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
       if (!globalAudioCtx) {
@@ -58,6 +59,22 @@ export default function PublicDisplay() {
       }
     } catch (e) {
       console.warn("Failed to initialize AudioContext", e);
+    }
+
+    if (audioRef.current) {
+      audioRef.current.volume = 0;
+      audioRef.current.play().then(() => {
+        audioRef.current.pause();
+        audioRef.current.volume = 1;
+      }).catch(() => {});
+    }
+    
+    if ('speechSynthesis' in window) {
+      try {
+        const u = new SpeechSynthesisUtterance('');
+        u.volume = 0;
+        window.speechSynthesis.speak(u);
+      } catch (e) {}
     }
   };
 
@@ -91,18 +108,25 @@ export default function PublicDisplay() {
 
     const playFallbackTTS = () => {
       try {
-        const url = `https://translate.google.com/translate_tts?ie=UTF-8&q=${encodeURIComponent(current.text)}&tl=id&client=tw-ob`;
-        const audio = new Audio(url);
+        const url = `https://translate.googleapis.com/translate_tts?client=gtx&ie=UTF-8&tl=id&q=${encodeURIComponent(current.text)}`;
+        const audio = audioRef.current || new Audio(url);
+        if (audioRef.current) {
+            audio.src = url;
+            audio.volume = 1;
+        }
         activeSourceRef.current = audio;
         audio.onended = () => finishUtterance();
         audio.onerror = (e) => {
           console.warn("Fallback TTS error", e);
           finishUtterance();
         };
-        audio.play().catch(e => {
-          console.warn("Fallback TTS play failed", e);
-          finishUtterance();
-        });
+        const playPromise = audio.play();
+        if (playPromise !== undefined) {
+            playPromise.catch(e => {
+                console.warn("Fallback TTS play failed", e);
+                finishUtterance();
+            });
+        }
         if (safetyTimeout) clearTimeout(safetyTimeout);
         safetyTimeout = setTimeout(() => finishUtterance(), 20000);
       } catch (err) {
@@ -628,6 +652,7 @@ export default function PublicDisplay() {
 
   return (
     <div className="h-screen w-screen max-h-screen max-w-full overflow-hidden bg-gradient-to-tr from-slate-950 via-slate-900 to-slate-950 text-white font-sans p-2 sm:p-3 select-none flex flex-col justify-between">
+      <audio ref={audioRef} className="hidden" preload="auto" />
       {/* HEADER UTAMA - VIBRANT PALETTE INDIGO HEADER WITH WHITE ROTATING LOGO */}
       <header className="p-2.5 sm:p-3 rounded-2xl flex flex-col md:flex-row md:items-center md:justify-between border-b-2 sm:border-b-4 border-amber-600 shadow-xl mb-1.5 sm:mb-2.5 space-x-2 space-y-2" style={{ backgroundColor: "#f59e0b", backgroundImage: "linear-gradient(to bottom right, #facc15, #f59e0b, #dc2626)" }}>
         <div className="flex items-center space-x-3 space-y-3">
