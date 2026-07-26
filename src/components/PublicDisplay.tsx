@@ -195,6 +195,23 @@ export default function PublicDisplay() {
     }
   };
 
+  const stopAnnouncing = (pesilatId: string) => {
+    if (!pesilatId) return;
+    const current = speechQueueRef.current[0];
+    speechQueueRef.current = speechQueueRef.current.filter(item => item.pesilatId !== pesilatId);
+    if (isSpeakingRef.current && current && current.pesilatId === pesilatId) {
+      if (activeSourceRef.current) {
+        try { activeSourceRef.current.pause(); } catch(e) {}
+        activeSourceRef.current = null;
+      }
+      if ("speechSynthesis" in window) {
+        window.speechSynthesis.cancel();
+      }
+      isSpeakingRef.current = false;
+      setTimeout(() => processQueue(), 500);
+    }
+  };
+
   const announceMatch = (arenaNum: number, p: Pesilat) => {
     if (!isAudioEnabledRef.current) return;
 
@@ -407,6 +424,9 @@ export default function PublicDisplay() {
       const currentPlayingId = playingPesilat ? playingPesilat.id : "";
 
       if (currentPlayingId && currentPlayingId !== prevPlayingId) {
+        if (prevPlayingId) {
+          stopAnnouncing(prevPlayingId);
+        }
         // Ada partai baru yang mulai bermain di arenaNum!
         announcedIdsRef.current[arenaNum] = currentPlayingId;
         
@@ -418,6 +438,7 @@ export default function PublicDisplay() {
         }
       } else if (!currentPlayingId && prevPlayingId) {
         // Arena menjadi kosong/standby
+        stopAnnouncing(prevPlayingId);
         announcedIdsRef.current[arenaNum] = "";
       }
     });
