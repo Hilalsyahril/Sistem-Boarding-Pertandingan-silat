@@ -89,20 +89,38 @@ export default function PublicDisplay() {
       }, 500);
     };
 
+    const playFallbackTTS = () => {
+      try {
+        const url = `https://translate.google.com/translate_tts?ie=UTF-8&q=${encodeURIComponent(current.text)}&tl=id&client=tw-ob`;
+        const audio = new Audio(url);
+        activeSourceRef.current = audio;
+        audio.onended = () => finishUtterance();
+        audio.onerror = (e) => {
+          console.warn("Fallback TTS error", e);
+          finishUtterance();
+        };
+        audio.play().catch(e => {
+          console.warn("Fallback TTS play failed", e);
+          finishUtterance();
+        });
+        if (safetyTimeout) clearTimeout(safetyTimeout);
+        safetyTimeout = setTimeout(() => finishUtterance(), 20000);
+      } catch (err) {
+        finishUtterance();
+      }
+    };
+
     try {
-      if ('speechSynthesis' in window) {
+      if ('speechSynthesis' in window && window.speechSynthesis.getVoices().length > 0) {
         const utterance = new SpeechSynthesisUtterance(current.text);
         utterance.lang = 'id-ID';
         
         const voices = window.speechSynthesis.getVoices();
-        
-        // Priority 1: explicitly indonesian + female / cewek / perempuan
         let idVoice = voices.find(v => 
           (v.lang.includes('id') || v.lang.includes('ID')) && 
           (v.name.toLowerCase().includes('female') || v.name.toLowerCase().includes('perempuan') || v.name.toLowerCase().includes('cewek') || v.name.toLowerCase().includes('google bahasa indonesia'))
         );
         
-        // Priority 2: any indonesian voice
         if (!idVoice) {
           idVoice = voices.find(v => v.lang.includes('id') || v.lang.includes('ID'));
         }
@@ -111,26 +129,24 @@ export default function PublicDisplay() {
           utterance.voice = idVoice;
         }
 
-        // Slight adjustments for more natural voice if possible
         utterance.rate = 0.9;
         utterance.pitch = 1.1;
 
         utterance.onend = () => finishUtterance();
         utterance.onerror = (e) => {
           console.warn("Native TTS error", e);
-          finishUtterance();
+          if (safetyTimeout) clearTimeout(safetyTimeout);
+          playFallbackTTS();
         };
 
         window.speechSynthesis.speak(utterance);
-        
-        // Safety timeout in case onend never fires
         safetyTimeout = setTimeout(() => finishUtterance(), 20000);
       } else {
-        throw new Error("Native Web Speech API not supported");
+        playFallbackTTS();
       }
     } catch (err) {
       console.warn("TTS failed:", err);
-      finishUtterance();
+      playFallbackTTS();
     }
   };
 
@@ -611,7 +627,7 @@ export default function PublicDisplay() {
   const layout = getArenaSizeConfig(jumlahArena);
 
   return (
-    <div className="h-screen w-screen max-h-screen max-w-full overflow-hidden text-white font-sans p-2 sm:p-3 select-none flex flex-col justify-between" style={{ backgroundColor: "#0f172a", backgroundImage: "radial-gradient(circle at center, #0f172a, #020617)" }}>
+    <div className="h-screen w-screen max-h-screen max-w-full overflow-hidden bg-gradient-to-tr from-slate-950 via-slate-900 to-slate-950 text-white font-sans p-2 sm:p-3 select-none flex flex-col justify-between">
       {/* HEADER UTAMA - VIBRANT PALETTE INDIGO HEADER WITH WHITE ROTATING LOGO */}
       <header className="p-2.5 sm:p-3 rounded-2xl flex flex-col md:flex-row md:items-center md:justify-between border-b-2 sm:border-b-4 border-amber-600 shadow-xl mb-1.5 sm:mb-2.5 space-x-2 space-y-2" style={{ backgroundColor: "#f59e0b", backgroundImage: "linear-gradient(to bottom right, #facc15, #f59e0b, #dc2626)" }}>
         <div className="flex items-center space-x-3 space-y-3">
@@ -645,7 +661,7 @@ export default function PublicDisplay() {
                 ? "bg-amber-400 text-neutral-950 border-amber-300 hover:bg-amber-300" 
                 : "bg-slate-850 text-slate-400 border-slate-700/50 hover:bg-slate-800"
             }`}
-            title={isAudioEnabled ? "Matikan suara panggilan otomatis" : "Aktifkan suara panggilan otomatis"}
+            title={isAudioEnabled ? "Matikan suara panggilan otomatis" : "Aktifkan suara panggilan otomatis"} autoFocus={true}
           >
             {isAudioEnabled ? (
               <>
@@ -741,20 +757,16 @@ export default function PublicDisplay() {
                 });
 
               const colors = ["bg-gradient-to-r from-yellow-400 via-amber-500 to-red-600", "bg-gradient-to-r from-amber-500 via-red-500 to-red-700", "bg-gradient-to-l from-yellow-400 via-amber-500 to-red-600"];
-              // Arena Header Fallback Colors
-              const headerStyle = playingPesilat 
-                ? { backgroundColor: "#f59e0b", backgroundImage: "linear-gradient(to right, #facc15, #f59e0b, #dc2626)" }
-                : { backgroundColor: "#334155" };
+              const arenaColor = playingPesilat ? "bg-gradient-to-r from-yellow-400 via-amber-500 to-red-600" : "bg-slate-700";
 
               return (
                 <div 
                   key={arenaNum}
                   id={`arena-${arenaNum}`}
-                  className="flex flex-col rounded-2xl border border-slate-850 shadow-xl overflow-hidden h-full min-h-0 hover:border-amber-600/30 hover:shadow-amber-500/10 transition duration-300"
-                  style={{ backgroundColor: "#0f172a" }}
+                  className="flex flex-col bg-slate-900 rounded-2xl border border-slate-850 shadow-xl overflow-hidden h-full min-h-0 hover:border-amber-600/30 hover:shadow-amber-500/10 transition duration-300"
                 >
                   {/* Arena Header - Vibrant Palette */}
-                  <div className={`${layout.headerPadding} text-center border-b border-white/10 relative flex items-center justify-center min-h-[36px] sm:min-h-[44px]`} style={headerStyle}>
+                  <div className={`${arenaColor} ${layout.headerPadding} text-center border-b border-white/10 relative flex items-center justify-center min-h-[36px] sm:min-h-[44px]`}>
                     <div>
                       <h2 className={`${layout.headerTitle} font-bold uppercase tracking-tighter italic text-white font-akira`}>
                         Arena {arenaNum}

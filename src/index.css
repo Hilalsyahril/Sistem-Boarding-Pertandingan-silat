@@ -1,46 +1,14 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&family=Syncopate:wght@400;700&display=swap');
-@import "tailwindcss";
 
-@theme {
-  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
-  --font-display: "Space Grotesk", sans-serif;
-  --font-akira: "Syncopate", sans-serif;
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer utilities {
+  .font-display {
+    font-family: "Space Grotesk", sans-serif;
+  }
+  .font-akira {
+    font-family: "Syncopate", sans-serif;
+  }
 }
-
-:root {
-  --color-slate-400: #94a3b8 !important;
-  --color-slate-500: #64748b !important;
-  --color-slate-700: #334155 !important;
-  --color-slate-800: #1e293b !important;
-  --color-slate-850: #162032 !important;
-  --color-slate-900: #0f172a !important;
-  --color-slate-950: #020617 !important;
-  --color-amber-100: #fef3c7 !important;
-  --color-amber-400: #fbbf24 !important;
-  --color-amber-500: #f59e0b !important;
-  --color-amber-600: #d97706 !important;
-  --color-red-200: #fecaca !important;
-  --color-red-400: #f87171 !important;
-  --color-red-500: #ef4444 !important;
-  --color-red-600: #dc2626 !important;
-  --color-red-700: #b91c1c !important;
-  --color-red-800: #991b1b !important;
-  --color-blue-400: #60a5fa !important;
-  --color-blue-500: #3b82f6 !important;
-  --color-blue-600: #2563eb !important;
-  --color-indigo-300: #a5b4fc !important;
-  --color-indigo-400: #818cf8 !important;
-  --color-indigo-500: #6366f1 !important;
-  --color-indigo-600: #4f46e5 !important;
-  --color-indigo-700: #4338ca !important;
-  --color-indigo-850: #2c2d76 !important;
-  --color-emerald-500: #10b981 !important;
-  --color-emerald-600: #059669 !important;
-  --color-rose-600: #e11d48 !important;
-  --color-neutral-400: #a3a3a3 !important;
-  --color-neutral-950: #0a0a0a !important;
-  --color-white: #ffffff !important;
-  --color-black: #000000 !important;
-  --color-transparent: transparent !important;
-}
-
