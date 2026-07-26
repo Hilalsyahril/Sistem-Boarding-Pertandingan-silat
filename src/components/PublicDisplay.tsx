@@ -487,7 +487,7 @@ export default function PublicDisplay() {
       return {
         gridCols: "grid-cols-1",
         gridRows: "grid-rows-1",
-        cardPadding: "p-4 sm:p-5 gap-3 sm:gap-4",
+        cardPadding: "p-4 sm:p-5 space-x-3 space-y-3 sm:gap-4",
         headerPadding: "p-3 sm:p-4",
         headerTitle: "text-4xl sm:text-5xl md:text-6xl",
         headerSubtitle: "text-xl sm:text-2xl md:text-3xl",
@@ -507,7 +507,7 @@ export default function PublicDisplay() {
       return {
         gridCols: "grid-cols-1 md:grid-cols-2",
         gridRows: "grid-rows-2 md:grid-rows-1",
-        cardPadding: "p-3 sm:p-4 gap-2.5 sm:gap-3",
+        cardPadding: "p-3 sm:p-4 space-x-2 space-y-2.5 sm:space-x-3 space-y-3",
         headerPadding: "p-2.5 sm:p-3",
         headerTitle: "text-3xl sm:text-4xl md:text-5xl",
         headerSubtitle: "text-lg sm:text-xl md:text-2xl",
@@ -527,7 +527,7 @@ export default function PublicDisplay() {
       return {
         gridCols: "grid-cols-1 md:grid-cols-3",
         gridRows: "grid-rows-3 md:grid-rows-1",
-        cardPadding: "p-2 sm:p-3 gap-2",
+        cardPadding: "p-2 sm:p-3 space-x-2 space-y-2",
         headerPadding: "p-2 sm:p-2.5",
         headerTitle: "text-2xl sm:text-3xl md:text-4xl",
         headerSubtitle: "text-base sm:text-lg md:text-xl",
@@ -547,7 +547,7 @@ export default function PublicDisplay() {
       return {
         gridCols: "grid-cols-1 sm:grid-cols-2",
         gridRows: "grid-rows-4 sm:grid-rows-2",
-        cardPadding: "p-2 gap-1.5 sm:gap-2",
+        cardPadding: "p-2 space-x-1 space-y-1.5 sm:space-x-2 space-y-2",
         headerPadding: "p-1.5 sm:p-2",
         headerTitle: "text-base sm:text-lg md:text-xl",
         headerSubtitle: "text-xs sm:text-sm md:text-base",
@@ -571,7 +571,7 @@ export default function PublicDisplay() {
       return {
         gridCols: cols,
         gridRows: "", // Let it flow naturally
-        cardPadding: "p-2 gap-1",
+        cardPadding: "p-2 space-x-1 space-y-1",
         headerPadding: "p-1",
         headerTitle: "text-sm sm:text-base",
         headerSubtitle: "text-[10px] sm:text-xs",
@@ -591,7 +591,7 @@ export default function PublicDisplay() {
     return {
       gridCols: "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3",
       gridRows: "grid-rows-auto sm:grid-rows-3 lg:grid-rows-2",
-      cardPadding: "p-1.5 gap-1",
+      cardPadding: "p-1.5 space-x-1 space-y-1",
       headerPadding: "p-1 sm:p-1.5",
       headerTitle: "text-sm sm:text-base md:text-lg",
       headerSubtitle: "text-[10px] sm:text-xs md:text-sm",
@@ -611,10 +611,10 @@ export default function PublicDisplay() {
   const layout = getArenaSizeConfig(jumlahArena);
 
   return (
-    <div className="h-screen w-screen max-h-screen max-w-full overflow-hidden bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-slate-900 to-slate-950 text-white font-sans p-2 sm:p-3 select-none flex flex-col justify-between">
+    <div className="h-screen w-screen max-h-screen max-w-full overflow-hidden text-white font-sans p-2 sm:p-3 select-none flex flex-col justify-between" style={{ backgroundColor: "#0f172a", backgroundImage: "radial-gradient(circle at center, #0f172a, #020617)" }}>
       {/* HEADER UTAMA - VIBRANT PALETTE INDIGO HEADER WITH WHITE ROTATING LOGO */}
-      <header className="bg-gradient-to-br from-yellow-400 via-amber-500 to-red-600 p-2.5 sm:p-3 rounded-2xl flex flex-col md:flex-row md:items-center md:justify-between border-b-2 sm:border-b-4 border-amber-600 shadow-xl mb-1.5 sm:mb-2.5 gap-2">
-        <div className="flex items-center gap-3">
+      <header className="p-2.5 sm:p-3 rounded-2xl flex flex-col md:flex-row md:items-center md:justify-between border-b-2 sm:border-b-4 border-amber-600 shadow-xl mb-1.5 sm:mb-2.5 space-x-2 space-y-2" style={{ backgroundColor: "#f59e0b", backgroundImage: "linear-gradient(to bottom right, #facc15, #f59e0b, #dc2626)" }}>
+        <div className="flex items-center space-x-3 space-y-3">
           <div>
             <h1 className="text-sm sm:text-base md:text-lg font-black tracking-tight uppercase text-white font-display">
               {judulAplikasi}
@@ -626,8 +626,8 @@ export default function PublicDisplay() {
         </div>
 
         {/* Status Mode Real-time & Clock */}
-        <div className="flex flex-wrap items-center gap-2 sm:gap-3 text-[10px] sm:text-xs">
-          <div className="text-left flex items-center gap-1.5">
+        <div className="flex flex-wrap items-center space-x-2 space-y-2 sm:space-x-3 space-y-3 text-[10px] sm:text-xs">
+          <div className="text-left flex items-center space-x-1 space-y-1.5">
             <span className="text-[8px] text-indigo-300 font-bold uppercase tracking-wider font-mono hidden xs:inline">Update:</span>
             <span className="font-mono font-bold text-white bg-indigo-850 px-2 py-0.5 rounded border border-indigo-600/50">{lastUpdated.toLocaleTimeString()}</span>
           </div>
@@ -640,7 +640,7 @@ export default function PublicDisplay() {
               setIsAudioEnabled(prev => !prev);
               if (!hasInteracted) handleInteraction();
             }}
-            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg font-bold text-[9px] sm:text-[10px] uppercase tracking-wider transition cursor-pointer shadow-md border ${
+            className={`flex items-center space-x-1 space-y-1.5 px-2.5 py-1 rounded-lg font-bold text-[9px] sm:text-[10px] uppercase tracking-wider transition cursor-pointer shadow-md border ${
               isAudioEnabled 
                 ? "bg-amber-400 text-neutral-950 border-amber-300 hover:bg-amber-300" 
                 : "bg-slate-850 text-slate-400 border-slate-700/50 hover:bg-slate-800"
@@ -663,12 +663,12 @@ export default function PublicDisplay() {
           <div className="hidden md:block h-6 w-px bg-indigo-500/50"></div>
 
           {config?.configured ? (
-            <div className="bg-emerald-500 text-white px-2.5 py-1 rounded-lg flex items-center gap-1.5 shadow-lg font-bold text-[9px] sm:text-[10px] uppercase tracking-wider">
+            <div className="bg-emerald-500 text-white px-2.5 py-1 rounded-lg flex items-center space-x-1 space-y-1.5 shadow-lg font-bold text-[9px] sm:text-[10px] uppercase tracking-wider">
               <span className="w-1.5 h-1.5 bg-white rounded-full animate-pulse"></span>
               <span>Live</span>
             </div>
           ) : (
-            <div className="bg-rose-600 text-white px-2.5 py-1 rounded-lg flex items-center gap-1.5 shadow-lg font-bold text-[9px] sm:text-[10px] uppercase tracking-wider">
+            <div className="bg-rose-600 text-white px-2.5 py-1 rounded-lg flex items-center space-x-1 space-y-1.5 shadow-lg font-bold text-[9px] sm:text-[10px] uppercase tracking-wider">
               <span className="w-1.5 h-1.5 bg-white rounded-full"></span>
               <span>Terputus</span>
             </div>
@@ -682,7 +682,7 @@ export default function PublicDisplay() {
       {/* BANNER AKTIVASI SUARA */}
       {!hasInteracted && (
         <div className="bg-amber-400 text-neutral-900 px-4 py-3 rounded-xl mb-2 flex items-center justify-between border-2 border-amber-500 shadow-[0_0_15px_rgba(251,191,36,0.3)] animate-pulse">
-          <div className="flex items-center gap-3">
+          <div className="flex items-center space-x-3 space-y-3">
             <div>
               <h3 className="font-bold text-sm sm:text-base">Aktivasi Panggilan Suara Diperlukan</h3>
               <p className="text-[10px] sm:text-xs font-medium">Browser memblokir pemutaran suara otomatis. Klik tombol di samping untuk mengaktifkan.</p>
@@ -699,7 +699,7 @@ export default function PublicDisplay() {
 
       {/* WARNING BANNER JIKA SUPABASE BELUM DIAKTIFKAN */}
       {!config?.configured && (
-        <div className="mb-1.5 sm:mb-2 bg-amber-500/10 border border-amber-500/20 rounded-xl p-2 flex items-start gap-2">
+        <div className="mb-1.5 sm:mb-2 bg-amber-500/10 border border-amber-500/20 rounded-xl p-2 flex items-start space-x-2 space-y-2">
           <AlertCircle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
           <div className="text-[8px] sm:text-[10px] text-amber-200">
             <span className="font-semibold">Database Belum Terhubung:</span> Sistem belum terhubung ke database PostgreSQL. Harap konfigurasi DATABASE_URL di berkas `.env`.
@@ -741,27 +741,31 @@ export default function PublicDisplay() {
                 });
 
               const colors = ["bg-gradient-to-r from-yellow-400 via-amber-500 to-red-600", "bg-gradient-to-r from-amber-500 via-red-500 to-red-700", "bg-gradient-to-l from-yellow-400 via-amber-500 to-red-600"];
-              const arenaColor = playingPesilat ? "bg-gradient-to-r from-yellow-400 via-amber-500 to-red-600" : "bg-slate-700";
+              // Arena Header Fallback Colors
+              const headerStyle = playingPesilat 
+                ? { backgroundColor: "#f59e0b", backgroundImage: "linear-gradient(to right, #facc15, #f59e0b, #dc2626)" }
+                : { backgroundColor: "#334155" };
 
               return (
                 <div 
                   key={arenaNum}
                   id={`arena-${arenaNum}`}
-                  className="flex flex-col bg-slate-900 rounded-2xl border border-slate-850 shadow-xl overflow-hidden h-full min-h-0 hover:border-amber-600/30 hover:shadow-amber-500/10 transition duration-300"
+                  className="flex flex-col rounded-2xl border border-slate-850 shadow-xl overflow-hidden h-full min-h-0 hover:border-amber-600/30 hover:shadow-amber-500/10 transition duration-300"
+                  style={{ backgroundColor: "#0f172a" }}
                 >
                   {/* Arena Header - Vibrant Palette */}
-                  <div className={`${arenaColor} ${layout.headerPadding} text-center border-b border-white/10 relative flex items-center justify-center min-h-[36px] sm:min-h-[44px]`}>
+                  <div className={`${layout.headerPadding} text-center border-b border-white/10 relative flex items-center justify-center min-h-[36px] sm:min-h-[44px]`} style={headerStyle}>
                     <div>
-                      <h2 className={`${layout.headerTitle} font-black uppercase tracking-tighter italic text-white font-display`}>
+                      <h2 className={`${layout.headerTitle} font-bold uppercase tracking-tighter italic text-white font-akira`}>
                         Arena {arenaNum}
                       </h2>
-                      <p className={`text-white/80 ${layout.headerSubtitle} font-bold uppercase tracking-widest mt-0.5 font-mono`}>
+                      <p className={`text-white/90 ${layout.headerSubtitle} font-bold uppercase tracking-widest mt-0.5 font-akira`}>
                         {playingPesilat ? (playingPesilat.kategori || "Tanding") : "Maintenance / Standby"}
                       </p>
                     </div>
 
                     {playingPesilat && (
-                      <span className="absolute right-2 sm:right-4 inline-flex items-center gap-1 bg-black/40 text-white border border-white/10 px-2 py-0.5 rounded-full text-[8px] sm:text-[9px] font-black tracking-widest uppercase font-mono shadow-inner">
+                      <span className="absolute right-2 sm:right-4 inline-flex items-center space-x-1 space-y-1 bg-black/40 text-white border border-white/10 px-2 py-0.5 rounded-full text-[8px] sm:text-[9px] font-black tracking-widest uppercase font-mono shadow-inner">
                         <span className="w-1 h-1 sm:w-1.5 sm:h-1.5 rounded-full bg-red-500 animate-ping"></span>
                         <span className="hidden xs:inline">LIVE</span> ON AIR
                       </span>
@@ -799,7 +803,7 @@ export default function PublicDisplay() {
                       </div>
                     ) : (
                       /* ADA MATCH AKTIF DENGAN TATA LETAK WIREFRAME: PARTAI RAKSASA DI TENGAH, DETAIL DI BAWAH */
-                      <div className="flex-1 flex flex-col justify-between gap-1.5 sm:gap-3 min-h-0 overflow-hidden">
+                      <div className="flex-1 flex flex-col justify-between space-x-1 space-y-1.5 sm:space-x-3 space-y-3 min-h-0 overflow-hidden">
                         
                         {/* 1. NOMOR PARTAI UTAMA RAKSASA (CENTERED) */}
                         <div className="flex-1 flex flex-col items-center justify-center relative py-1 sm:py-3 min-h-0">
@@ -818,7 +822,7 @@ export default function PublicDisplay() {
                           <div className="bg-slate-950/80 border border-slate-850 p-2 sm:p-3 rounded-xl space-y-1.5 sm:space-y-2 shadow-inner min-h-0">
                             
                             {/* Metadata: Gender, Kategori & Kelas */}
-                            <div className="flex flex-wrap items-center justify-center gap-1 border-b border-slate-900 pb-1 text-center">
+                            <div className="flex flex-wrap items-center justify-center space-x-1 space-y-1 border-b border-slate-900 pb-1 text-center">
                               <span className={`bg-indigo-500/10 text-indigo-400 border border-amber-600/20 ${layout.metaTextSize} rounded font-mono uppercase font-bold tracking-wider`}>
                                 {playingPesilat.kategori}
                               </span>
@@ -951,7 +955,7 @@ export default function PublicDisplay() {
                     {!layout.hideFooter && (
                       <div className="p-1.5 bg-slate-950/50 border border-slate-850 rounded-lg text-[8px] text-slate-500 font-mono flex items-center justify-between">
                         <span>IP-Arena: #10.0.0.{arenaNum}</span>
-                        <span className="uppercase text-emerald-400 font-bold flex items-center gap-1">
+                        <span className="uppercase text-emerald-400 font-bold flex items-center space-x-1 space-y-1">
                           <span className="w-1 h-1 rounded-full bg-emerald-500 animate-ping"></span>
                           GELANGGANG READY
                         </span>
@@ -971,7 +975,7 @@ export default function PublicDisplay() {
         <div>
           Hilalsyahril@Copyright2026
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center space-x-2 space-y-2">
           <span>Boarding v1.0.0</span>
           <div className="flex -space-x-1">
             <div className="w-2.5 h-2.5 rounded-full bg-rose-500"></div>
