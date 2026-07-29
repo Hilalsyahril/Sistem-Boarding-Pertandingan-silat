@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { 
   Users, Settings, LogOut, Plus, Trash2, Edit2, ShieldAlert, CheckCircle, 
   UserPlus, RefreshCw, Layers, Award, UsersRound, HelpCircle, LayoutGrid,
-  Play, Pause, RotateCcw, Tv, Clock, Timer, FileSpreadsheet, Upload, Download, Volume2, SkipForward, Square, X
+  Play, Pause, RotateCcw, Tv, Undo2, Clock, Timer, FileSpreadsheet, Upload, Download, Volume2, SkipForward, Square, X
 } from "lucide-react";
 import * as XLSX from "xlsx";
 import { Pesilat, ConfigStatus } from "../types";
@@ -807,6 +807,17 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
 
   // 2. Submit Form Pesilat (Add / Update)
 
+  const handleUndoPartai = async (arena: number) => {
+    try {
+      const res = await fetch(`/api/arena/${arena}/undo`, { method: "POST" });
+      if (res.ok) {
+        await fetchInitialData(3, 1500, true);
+      }
+    } catch (err) {
+      console.error("Gagal undo partai:", err);
+    }
+  };
+
   const handleNextPartai = async (arena: number) => {
     try {
       const res = await fetch(`/api/arena/${arena}/next`, { method: "POST" });
@@ -1492,6 +1503,16 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                                 <Volume2 className="w-3.5 h-3.5" />
                                 <span className="hidden sm:inline text-[10px] font-black uppercase tracking-widest font-mono">Panggil</span>
                               </button>
+                              {/* Undo Partai */}
+                              <button
+                                onClick={() => handleUndoPartai(arenaNum)}
+                                className="p-1.5 px-2 bg-slate-700/20 hover:bg-slate-700/40 text-slate-400 border border-slate-600/30 rounded-lg transition cursor-pointer flex items-center justify-center gap-1.5 flex-1 sm:flex-none"
+                                title="Kembali ke Partai Sebelumnya"
+                              >
+                                <Undo2 className="w-3.5 h-3.5" />
+                                <span className="hidden xl:inline text-[10px] font-black uppercase tracking-widest font-mono">Undo</span>
+                              </button>
+                              
                               {/* Next Partai */}
                               <button
                                 onClick={() => handleNextPartai(arenaNum)}
@@ -1544,12 +1565,20 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                         ) : (
                           <div className="py-6 text-center text-slate-600 font-mono text-[10px] border border-dashed border-slate-800 rounded-xl flex flex-col items-center justify-center gap-2">
                             <p>Gelanggang Standby.</p>
-                            <button
-                              onClick={() => handleNextPartai(arenaNum)}
-                              className="px-3 py-1.5 bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/30 rounded-lg font-bold transition-colors uppercase tracking-wider"
-                            >
-                              Mulai Partai Berikutnya
-                            </button>
+                            <div className="flex gap-2 justify-center">
+                              <button
+                                onClick={() => handleUndoPartai(arenaNum)}
+                                className="px-3 py-1.5 bg-slate-800/50 hover:bg-slate-700 text-slate-300 border border-slate-700/50 rounded-lg font-bold transition-colors uppercase tracking-wider flex items-center gap-1.5"
+                              >
+                                <Undo2 className="w-3.5 h-3.5" /> Undo
+                              </button>
+                              <button
+                                onClick={() => handleNextPartai(arenaNum)}
+                                className="px-3 py-1.5 bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/30 rounded-lg font-bold transition-colors uppercase tracking-wider"
+                              >
+                                Mulai Partai Berikutnya
+                              </button>
+                            </div>
                             <p className="text-[9px] text-slate-500 mt-1">Atau aktifkan atlet dari tombol <strong className="text-indigo-400">TAMPIL</strong> di bawah.</p>
                           </div>
                         )}
@@ -1609,16 +1638,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                       <span>Impor Excel</span>
                     </button>
 
-                                        {/* Download cPanel Build Button */}
-                    <a
-                      href="/deploy_cpanel.zip"
-                      download="deploy_cpanel.zip"
-                      className="px-3 py-1.5 bg-amber-950 hover:bg-amber-900 border border-amber-800 rounded-xl text-amber-300 hover:text-amber-100 transition text-xs font-black flex items-center gap-1.5 cursor-pointer"
-                      title="Unduh file siap deploy ke cPanel"
-                    >
-                      <Download className="w-3.5 h-3.5 text-amber-400" />
-                      <span className="hidden sm:inline">Download cPanel</span>
-                    </a>
+
                     
                     {/* Export Excel Button */}
                     <button

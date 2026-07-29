@@ -728,7 +728,7 @@ app.post("/api/arena/:arena/undo", async (req, res) => {
     
     if (lastDoneMatch) {
        // Set last done match back to playing
-       await updatePesilat(lastDoneMatch.id, { is_playing: true, timer_running: autoNext, timer_last_updated_at: Date.now(), is_done: false });
+       await updatePesilat(lastDoneMatch.id, { is_playing: true, timer_running: autoNext, timer_last_updated_at: Date.now(), is_done: false, timer_seconds_left: lastDoneMatch.timer_duration || 120 });
     }
     
     res.json({ success: true });
