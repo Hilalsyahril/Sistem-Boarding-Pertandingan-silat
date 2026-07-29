@@ -718,6 +718,8 @@ app.post("/api/arena/:arena/undo", async (req, res) => {
     
     // Find the last finished match
     const lastDoneMatch = arenaMatches.find(m => m.is_done);
+    const pengaturan = await getPengaturanArena();
+    const autoNext = pengaturan.auto_next !== undefined ? pengaturan.auto_next : true;
 
     if (currentPlaying) {
        // Revert currently playing to queue
@@ -726,7 +728,7 @@ app.post("/api/arena/:arena/undo", async (req, res) => {
     
     if (lastDoneMatch) {
        // Set last done match back to playing
-       await updatePesilat(lastDoneMatch.id, { is_playing: true, timer_running: false, timer_last_updated_at: Date.now(), is_done: false });
+       await updatePesilat(lastDoneMatch.id, { is_playing: true, timer_running: autoNext, timer_last_updated_at: Date.now(), is_done: false });
     }
     
     res.json({ success: true });

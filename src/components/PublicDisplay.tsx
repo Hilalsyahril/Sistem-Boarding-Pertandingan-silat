@@ -320,7 +320,7 @@ export default function PublicDisplay() {
       } catch (err) {
         if (err.message !== "Failed to fetch") console.error("Gagal memuat pengumuman:", err);
       }
-    }, 3000);
+    }, 1000);
     return () => clearInterval(interval);
   }, [isAudioEnabled]);
 
@@ -434,7 +434,7 @@ export default function PublicDisplay() {
         
         // Panggil suara pengumuman jika belum dipanggil dalam 30 detik terakhir (mencegah double call)
         const lastTime = recentlyAnnounced.current[currentPlayingId] || 0;
-        if (Date.now() - lastTime > 30000) {
+        if (Date.now() - lastTime > 10000) {
           recentlyAnnounced.current[currentPlayingId] = Date.now();
           announceMatch(arenaNum, playingPesilat);
         }
@@ -872,7 +872,7 @@ export default function PublicDisplay() {
                             <div className="space-y-1">
                               {waitingQueue.slice(0, 2).map((item) => (
                                 <div key={item.id} className="text-[9px] sm:text-xs flex justify-between text-slate-300 font-medium truncate">
-                                  <span className="truncate">P-{item.nomor_partai} • {item.nama_pesilat}</span>
+                                  <span className="truncate">P-{item.nomor_partai} • {item.nama_pesilat && item.nama_pesilat_biru ? `${item.nama_pesilat} vs ${item.nama_pesilat_biru}` : item.nama_pesilat || item.nama_pesilat_biru}</span>
                                   <span className="text-[8px] sm:text-[9px] text-indigo-400 font-mono uppercase shrink-0 ml-1">G-{item.arena}</span>
                                 </div>
                               ))}
@@ -918,7 +918,7 @@ export default function PublicDisplay() {
                               </span>
                             </div>
 
-                            {playingPesilat.nama_pesilat_biru ? (
+                            {playingPesilat.nama_pesilat_biru && playingPesilat.nama_pesilat ? (
                               /* KATEGORI TANDING: SUDUT BIRU (KIRI) vs SUDUT MERAH (KANAN) DENGAN TIMER DI TENGAH */
                               <div className="grid grid-cols-12 gap-1 sm:gap-2 items-center">
                                 
@@ -972,23 +972,54 @@ export default function PublicDisplay() {
                                   </p>
                                 </div>
                               </div>
-                            ) : (
-                              /* KATEGORI TUNGGAL/SENI/SOLO: ATLET UTAMA DENGAN TIMER DI KANAN */
+                            ) : playingPesilat.nama_pesilat_biru ? (
+                              /* SOLO BIRU */
                               <div className="grid grid-cols-12 gap-1 sm:gap-2 items-center">
-                                
-                                {/* Kiri/Tengah: Detail Atlet */}
-                                <div className={`${autoNextMatch ? 'col-span-9' : 'col-span-12'} bg-indigo-600/10 ${layout.competitorPadding} border-amber-600 rounded-r-lg min-w-0 shadow-md`}>
-                                  <span className="text-indigo-400 font-mono text-[7px] sm:text-[9px] font-black uppercase tracking-widest block mb-0.5">
-                                    Pesilat Solo
+                                {/* Kiri/Tengah: Detail Atlet Biru */}
+                                <div className={`${autoNextMatch ? 'col-span-9' : 'col-span-12'} bg-blue-600/10 ${layout.competitorPadding} border-blue-600 rounded-r-lg min-w-0 shadow-md`}>
+                                  <span className="text-blue-400 font-mono text-[7px] sm:text-[9px] font-black uppercase tracking-widest block mb-0.5">
+                                    Pesilat Biru
+                                  </span>
+                                  <h4 className={`${layout.competitorText} text-white uppercase truncate font-display leading-tight`}>
+                                    {playingPesilat.nama_pesilat_biru}
+                                  </h4>
+                                  <p className="text-[8px] sm:text-[10px] text-blue-200/80 font-bold mt-0.5 truncate uppercase tracking-wider font-mono">
+                                    {playingPesilat.kontingen_biru}
+                                  </p>
+                                </div>
+                                {/* Kanan: Timer */}
+                                {autoNextMatch && (
+                                  <div className="col-span-3 flex flex-col items-center justify-center bg-slate-900 border border-slate-800 rounded-lg py-1 sm:py-2 px-1 text-center">
+                                    <div className={`font-mono ${layout.timerText} font-black leading-none ${
+                                      playingPesilat.timer_seconds_left <= 10 && playingPesilat.timer_running
+                                        ? "text-red-500 animate-pulse drop-shadow-[0_0_4px_rgba(239,68,68,0.5)]"
+                                        : "text-emerald-400"
+                                    }`}>
+                                      {Math.floor(playingPesilat.timer_seconds_left / 60).toString().padStart(2, "0")}
+                                      :
+                                      {(playingPesilat.timer_seconds_left % 60).toString().padStart(2, "0")}
+                                    </div>
+                                    <span className="text-[5px] sm:text-[7px] text-slate-500 font-mono font-bold uppercase tracking-wider mt-0.5">
+                                      {playingPesilat.timer_running ? "RUN" : "PAUSE"}
+                                    </span>
+                                  </div>
+                                )}
+                              </div>
+                            ) : (
+                              /* SOLO MERAH */
+                              <div className="grid grid-cols-12 gap-1 sm:gap-2 items-center">
+                                {/* Kiri/Tengah: Detail Atlet Merah */}
+                                <div className={`${autoNextMatch ? 'col-span-9' : 'col-span-12'} bg-red-600/10 ${layout.competitorPadding} border-red-600 rounded-r-lg min-w-0 shadow-md`}>
+                                  <span className="text-red-400 font-mono text-[7px] sm:text-[9px] font-black uppercase tracking-widest block mb-0.5">
+                                    Pesilat Merah
                                   </span>
                                   <h4 className={`${layout.competitorText} text-white uppercase truncate font-display leading-tight`}>
                                     {playingPesilat.nama_pesilat}
                                   </h4>
-                                  <p className="text-[8px] sm:text-[10px] text-indigo-200/80 font-bold mt-0.5 truncate uppercase tracking-wider font-mono">
+                                  <p className="text-[8px] sm:text-[10px] text-red-200/80 font-bold mt-0.5 truncate uppercase tracking-wider font-mono">
                                     {playingPesilat.kontingen}
                                   </p>
                                 </div>
-
                                 {/* Kanan: Timer */}
                                 {autoNextMatch && (
                                   <div className="col-span-3 flex flex-col items-center justify-center bg-slate-900 border border-slate-800 rounded-lg py-1 sm:py-2 px-1 text-center">
@@ -1031,7 +1062,7 @@ export default function PublicDisplay() {
                                 className={`bg-slate-950/20 ${layout.queueItemPadding} rounded flex justify-between items-center text-[7px] sm:text-[8px] border border-white/5`}
                               >
                                 <span className="font-bold text-slate-400 truncate max-w-[80%] uppercase">
-                                  P-{pesilat.nomor_partai || "00"} • {pesilat.nama_pesilat} {pesilat.nama_pesilat_biru ? `vs ${pesilat.nama_pesilat_biru}` : ""}
+                                  P-{pesilat.nomor_partai || "00"} • {pesilat.nama_pesilat && pesilat.nama_pesilat_biru ? `${pesilat.nama_pesilat} vs ${pesilat.nama_pesilat_biru}` : pesilat.nama_pesilat || pesilat.nama_pesilat_biru}
                                 </span>
                                 <span className="text-[6px] text-indigo-400 font-mono font-bold uppercase shrink-0">
                                   {pesilat.kelas.split(" ")[0] || pesilat.kelas}

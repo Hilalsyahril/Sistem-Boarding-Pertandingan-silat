@@ -42,7 +42,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
       await fetch("/api/pengaturan_arena", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ jumlah_arena: inputJumlahArena, judul_aplikasi: inputJudulAplikasi, auto_next: newVal })
+        body: JSON.stringify({ jumlah_arena: jumlahArena, judul_aplikasi: judulAplikasi, auto_next: newVal })
       });
       if (!newVal) {
         await fetch("/api/pesilat/timer-all", {
@@ -403,6 +403,22 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
             setPesilatList(data);
           }
         }
+        
+        const arenaRes = await fetch(`/api/pengaturan_arena?_t=${Date.now()}`);
+        if (arenaRes.ok) {
+          const arenaData = await arenaRes.json();
+          const arenaItem = Array.isArray(arenaData) ? arenaData[0] : arenaData;
+          if (arenaItem) {
+             if (arenaItem.auto_next !== undefined) setAutoNextMatch(arenaItem.auto_next);
+             if (arenaItem.jumlah_arena !== undefined) {
+                setJumlahArena(arenaItem.jumlah_arena);
+                // setInputJumlahArena(arenaItem.jumlah_arena); // Might interfere with currently typing admin, maybe don't update input
+             }
+             if (arenaItem.judul_aplikasi !== undefined) {
+                setJudulAplikasi(arenaItem.judul_aplikasi);
+             }
+          }
+        }
       } catch (e) {
         // ignore
       }
@@ -614,10 +630,10 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
             gender: gender,
             timer_duration: duration
           };
-        }).filter(item => item.nama_pesilat && item.kontingen); // Filter yang minimal punya nama merah & kontingen merah
+        }).filter(item => item.nama_pesilat || item.nama_pesilat_biru);
 
         if (mappedItems.length === 0) {
-          throw new Error("Format kolom Excel tidak cocok atau tidak ada baris data valid (kolom 'Sudut Merah (Nama Pesilat)' dan 'Sudut Merah (Kontingen)' wajib diisi).");
+          throw new Error("Format kolom Excel tidak cocok atau tidak ada baris data valid (salah satu nama atlet harus diisi).");
         }
 
         const res = await fetch("/api/pesilat/batch", {
@@ -1231,15 +1247,19 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                         <label className="block text-[10px] font-bold text-slate-400 mb-1.5 uppercase tracking-widest font-mono">
                           Kategori
                         </label>
-                        <select
+                        <input
+                          type="text"
+                          list="opsiKategoriList"
                           value={kategori}
                           onChange={(e) => setKategori(e.target.value)}
                           className="w-full bg-slate-950 border border-slate-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-white rounded-xl px-2 py-2.5 outline-none transition text-xs sm:text-sm"
-                        >
+                          placeholder="Pilih/Ketik Kategori..."
+                        />
+                        <datalist id="opsiKategoriList">
                           {opsiKategori.map((k) => (
-                            <option key={k} value={k}>{k}</option>
+                            <option key={k} value={k} />
                           ))}
-                        </select>
+                        </datalist>
                       </div>
                     </div>
 
@@ -1247,15 +1267,19 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                       <label className="block text-[10px] font-bold text-slate-400 mb-1.5 uppercase tracking-widest font-mono">
                         Kelas Tanding / Seni
                       </label>
-                      <select
+                      <input
+                        type="text"
+                        list="opsiKelasList"
                         value={kelas}
                         onChange={(e) => setKelas(e.target.value)}
                         className="w-full bg-slate-950 border border-slate-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-white rounded-xl px-2.5 py-2.5 outline-none transition text-xs sm:text-sm"
-                      >
+                        placeholder="Pilih/Ketik Kelas..."
+                      />
+                      <datalist id="opsiKelasList">
                         {opsiKelas.map((k) => (
-                          <option key={k} value={k}>{k}</option>
+                          <option key={k} value={k} />
                         ))}
-                      </select>
+                      </datalist>
                     </div>
 
                     <div>
@@ -1397,24 +1421,21 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                               </div>
 
                               {/* Sudut Biru vs Sudut Merah display */}
-                              <div className="grid grid-cols-2 gap-2 text-center text-xs mt-3">
-                                {activePesilat.nama_pesilat_biru ? (
+                              <div className={`grid ${activePesilat.nama_pesilat_biru && activePesilat.nama_pesilat ? 'grid-cols-2' : 'grid-cols-1'} gap-2 text-center text-xs mt-3`}>
+                                {activePesilat.nama_pesilat_biru && (
                                   <div className="p-2 rounded-lg bg-blue-500/10 border border-blue-500/25 text-blue-200">
                                     <p className="font-mono text-[9px] text-blue-400 font-bold tracking-widest uppercase mb-0.5">BIRU</p>
                                     <p className="font-black truncate text-xs">{activePesilat.nama_pesilat_biru}</p>
                                     <p className="text-[9px] text-blue-300/70 truncate mt-0.5 font-medium">{activePesilat.kontingen_biru}</p>
                                   </div>
-                                ) : (
-                                  <div className="p-2 rounded-lg bg-slate-900 border border-slate-800 text-slate-500 flex flex-col items-center justify-center font-mono text-[9px] uppercase tracking-wider font-bold">
-                                    <span>SENI</span>
-                                    <span>TUNGGAL</span>
+                                )}
+                                {activePesilat.nama_pesilat && (
+                                  <div className="p-2 rounded-lg bg-red-500/10 border border-red-500/25 text-red-200">
+                                    <p className="font-mono text-[9px] text-red-400 font-bold tracking-widest uppercase mb-0.5">MERAH</p>
+                                    <p className="font-black truncate text-xs">{activePesilat.nama_pesilat}</p>
+                                    <p className="text-[9px] text-red-300/70 truncate mt-0.5 font-medium">{activePesilat.kontingen}</p>
                                   </div>
                                 )}
-                                <div className="p-2 rounded-lg bg-red-500/10 border border-red-500/25 text-red-200">
-                                  <p className="font-mono text-[9px] text-red-400 font-bold tracking-widest uppercase mb-0.5">MERAH</p>
-                                  <p className="font-black truncate text-xs">{activePesilat.nama_pesilat}</p>
-                                  <p className="text-[9px] text-red-300/70 truncate mt-0.5 font-medium">{activePesilat.kontingen}</p>
-                                </div>
                               </div>
                             </div>
 
@@ -1588,6 +1609,17 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                       <span>Impor Excel</span>
                     </button>
 
+                                        {/* Download cPanel Build Button */}
+                    <a
+                      href="/deploy_cpanel.zip"
+                      download="deploy_cpanel.zip"
+                      className="px-3 py-1.5 bg-amber-950 hover:bg-amber-900 border border-amber-800 rounded-xl text-amber-300 hover:text-amber-100 transition text-xs font-black flex items-center gap-1.5 cursor-pointer"
+                      title="Unduh file siap deploy ke cPanel"
+                    >
+                      <Download className="w-3.5 h-3.5 text-amber-400" />
+                      <span className="hidden sm:inline">Download cPanel</span>
+                    </a>
+                    
                     {/* Export Excel Button */}
                     <button
                       onClick={handleExportExcel}
@@ -1597,6 +1629,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                       <Download className="w-3.5 h-3.5 text-emerald-400" />
                       <span>Ekspor Excel</span>
                     </button>
+
 
                     {/* Refresh Button */}
                     <button
@@ -1734,11 +1767,13 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                                   )}
                                   
                                   {/* Merah Corner */}
-                                  <div className={`flex items-center gap-1 min-w-0 ${p.nama_pesilat_biru ? "border-t border-slate-800/50 pt-1" : ""}`}>
-                                    <span className="w-1.5 h-1.5 bg-red-500 rounded-full shrink-0" />
-                                    <span className="font-bold text-white uppercase truncate text-[11px] sm:text-xs block max-w-[80px] xs:max-w-[120px] sm:max-w-none">{p.nama_pesilat}</span>
-                                    <span className="text-[9px] sm:text-[10px] text-slate-400 font-medium truncate shrink-0">({p.kontingen})</span>
-                                  </div>
+                                  {p.nama_pesilat && (
+                                    <div className={`flex items-center gap-1 min-w-0 ${p.nama_pesilat_biru ? "border-t border-slate-800/50 pt-1" : ""}`}>
+                                      <span className="w-1.5 h-1.5 bg-red-500 rounded-full shrink-0" />
+                                      <span className="font-bold text-white uppercase truncate text-[11px] sm:text-xs block max-w-[80px] xs:max-w-[120px] sm:max-w-none">{p.nama_pesilat}</span>
+                                      <span className="text-[9px] sm:text-[10px] text-slate-400 font-medium truncate shrink-0">({p.kontingen})</span>
+                                    </div>
+                                  )}
                                 </div>
                               </div>
                             </td>

@@ -43,6 +43,16 @@ export default function OperatorDashboard({ onLogout, username }: { onLogout: ()
           const data = await res.json();
           if (Array.isArray(data)) setPesilatList(data);
         }
+        
+        const arenaRes = await fetch(`/api/pengaturan_arena?_t=${Date.now()}`);
+        if (arenaRes.ok) {
+          const arenaData = await arenaRes.json();
+          const arenaItem = Array.isArray(arenaData) ? arenaData[0] : arenaData;
+          if (arenaItem) {
+             if (arenaItem.auto_next !== undefined) setAutoNextMatch(arenaItem.auto_next);
+             if (arenaItem.jumlah_arena !== undefined) setJumlahArena(arenaItem.jumlah_arena);
+          }
+        }
       } catch (e) {
         // ignore
       }
@@ -237,20 +247,25 @@ export default function OperatorDashboard({ onLogout, username }: { onLogout: ()
                   <div className="space-y-4">
                     {/* INFO PESILAT */}
                     <div className="grid grid-cols-2 gap-2 text-center text-xs">
-                      {activePesilat.kategori !== "Tanding" ? (
-                        <div className="col-span-2 bg-indigo-500/10 border border-indigo-500/20 p-2 rounded-lg truncate">
-                          <p className="font-black uppercase">{activePesilat.nama_pesilat}</p>
-                          <p className="text-[9px] text-indigo-300 font-bold truncate mt-0.5">{activePesilat.kontingen}</p>
+                      {activePesilat.nama_pesilat_biru && !activePesilat.nama_pesilat ? (
+                        <div className="col-span-2 bg-blue-500/10 border border-blue-500/20 p-2 rounded-lg truncate">
+                          <p className="font-black uppercase text-blue-100">{activePesilat.nama_pesilat_biru}</p>
+                          <p className="text-[9px] text-blue-300 font-bold truncate mt-0.5">{activePesilat.kontingen_biru}</p>
+                        </div>
+                      ) : activePesilat.nama_pesilat && !activePesilat.nama_pesilat_biru ? (
+                        <div className="col-span-2 bg-red-500/10 border border-red-500/20 p-2 rounded-lg truncate">
+                          <p className="font-black uppercase text-red-100">{activePesilat.nama_pesilat}</p>
+                          <p className="text-[9px] text-red-300 font-bold truncate mt-0.5">{activePesilat.kontingen}</p>
                         </div>
                       ) : (
                         <>
-                          <div className="bg-red-500/10 border border-red-500/20 p-2 rounded-lg truncate">
-                            <p className="font-black uppercase text-red-100">{activePesilat.nama_pesilat}</p>
-                            <p className="text-[9px] text-red-300 font-bold truncate mt-0.5">{activePesilat.kontingen}</p>
-                          </div>
                           <div className="bg-blue-500/10 border border-blue-500/20 p-2 rounded-lg truncate">
                             <p className="font-black uppercase text-blue-100">{activePesilat.nama_pesilat_biru}</p>
                             <p className="text-[9px] text-blue-300 font-bold truncate mt-0.5">{activePesilat.kontingen_biru}</p>
+                          </div>
+                          <div className="bg-red-500/10 border border-red-500/20 p-2 rounded-lg truncate">
+                            <p className="font-black uppercase text-red-100">{activePesilat.nama_pesilat}</p>
+                            <p className="text-[9px] text-red-300 font-bold truncate mt-0.5">{activePesilat.kontingen}</p>
                           </div>
                         </>
                       )}
