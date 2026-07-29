@@ -4,6 +4,7 @@ import fs from "fs";
 import path from "path";
 import dotenv from "dotenv";
 import mysql from "mysql2/promise";
+import pg from "pg";
 
 dotenv.config();
 
@@ -26,10 +27,24 @@ if (!DB_URL) {
   console.error("DATABASE_URL is not set. Please set it to a valid PostgreSQL connection string in .env");
 }
 
+const isPostgres = DB_URL ? DB_URL.startsWith('postgres://') || DB_URL.startsWith('postgresql://') : false;
 
-let rawPool: mysql.Pool | null = DB_URL ? mysql.createPool(DB_URL) : null;
+let rawPool: mysql.Pool | null = null;
+let realPgPool: pg.Pool | null = null;
 
-const pgPool = rawPool ? {
+if (DB_URL) {
+  if (isPostgres) {
+    realPgPool = new pg.Pool({ connectionString: DB_URL });
+  } else {
+    rawPool = mysql.createPool(DB_URL);
+  }
+}
+
+const pgPool = realPgPool ? {
+  query: async (text: string, params: any[] = []) => {
+    return await realPgPool!.query(text, params);
+  }
+} : (rawPool ? {
   query: async (text: string, params: any[] = []) => {
     let newParams: any[] = [];
     let hasParams = false;
@@ -67,11 +82,11 @@ const pgPool = rawPool ? {
       return { rows: rows, rowCount: res.affectedRows };
     }
   }
-} : null;
+} : null);
 
 
 if (pgPool) {
-  console.log("Using PostgreSQL Database");
+  console.log(isPostgres ? "Using PostgreSQL Database" : "Using MySQL Database with PG Wrapper");
 } else {
   console.log("Waiting for DATABASE_URL...");
 }
@@ -107,6 +122,12 @@ async function initDb() {
       is_done BOOLEAN DEFAULT false
     )`);
   await pgPool.query(`CREATE TABLE IF NOT EXISTS admin_users (
+      id VARCHAR(255) PRIMARY KEY,
+      username VARCHAR(255) UNIQUE,
+      password VARCHAR(255),
+      token VARCHAR(255)
+    )`);
+  await pgPool.query(`CREATE TABLE IF NOT EXISTS operator_users (
       id VARCHAR(255) PRIMARY KEY,
       username VARCHAR(255) UNIQUE,
       password VARCHAR(255),
@@ -263,6 +284,72 @@ app.post("/api/admin/change-password", async (req, res) => {
   } catch (error: any) { res.status(200).json({ error: error.message, is_500: true }); }
 });
 
+app.get("/api/admin/operators", async (req, res) => {
+  try {
+    if (!pgPool) return res.status(200).json({ error: "Database not connected", is_500: true });
+    const result = await pgPool.query("SELECT id, username FROM operator_users");
+    res.json(result.rows);
+  } catch (error: any) { res.status(200).json({ error: error.message, is_500: true }); }
+});
+
+app.post("/api/admin/operators", async (req, res) => {
+  try {
+    if (!pgPool) return res.status(200).json({ error: "Database not connected", is_500: true });
+    const { username, password } = req.body;
+    const id = Date.now().toString() + Math.random().toString(36).substring(2);
+    await pgPool.query("INSERT INTO operator_users (id, username, password) VALUES ($1, $2, $3)", [id, username, password]);
+    res.json({ success: true, id, username });
+  } catch (error: any) { res.status(200).json({ error: error.message, is_500: true }); }
+});
+
+app.delete("/api/admin/operators/:id", async (req, res) => {
+  try {
+    if (!pgPool) return res.status(200).json({ error: "Database not connected", is_500: true });
+    await pgPool.query("DELETE FROM operator_users WHERE id = $1", [req.params.id]);
+    res.json({ success: true });
+  } catch (error: any) { res.status(200).json({ error: error.message, is_500: true }); }
+});
+
+app.put("/api/admin/operators/:id/password", async (req, res) => {
+  try {
+    if (!pgPool) return res.status(200).json({ error: "Database not connected", is_500: true });
+    const { password } = req.body;
+    await pgPool.query("UPDATE operator_users SET password = $1 WHERE id = $2", [password, req.params.id]);
+    res.json({ success: true });
+  } catch (error: any) { res.status(200).json({ error: error.message, is_500: true }); }
+});
+
+app.post("/api/operator/login", async (req, res) => {
+  try {
+    const { username, password } = req.body;
+    if (!pgPool) return res.status(200).json({ error: "Database not connected", is_500: true });
+    
+    const result = await pgPool.query("SELECT * FROM operator_users WHERE username = $1 AND password = $2", [username, password]);
+    if (result.rows.length > 0) {
+      const token = Date.now().toString() + Math.random().toString(36).substring(2);
+      await pgPool.query("UPDATE operator_users SET token = $1 WHERE id = $2", [token, result.rows[0].id]);
+      res.json({ success: true, token });
+    } else {
+      res.status(401).json({ error: "Username atau password salah" });
+    }
+  } catch (error: any) { res.status(200).json({ error: error.message, is_500: true }); }
+});
+
+app.post("/api/operator/verify", async (req, res) => {
+  try {
+    const { token } = req.body;
+    if (!pgPool) return res.status(200).json({ error: "Database not connected", is_500: true });
+    
+    if (!token) return res.status(401).json({ error: "No token" });
+    const result = await pgPool.query("SELECT * FROM operator_users WHERE token = $1", [token]);
+    if (result.rows.length > 0) {
+      res.json({ valid: true, username: result.rows[0].username });
+    } else {
+      res.status(401).json({ valid: false });
+    }
+  } catch (error: any) { res.status(200).json({ error: error.message, is_500: true }); }
+});
+
 app.get("/api/config-status", (req, res) => {
   res.json({ configured: !!pgPool, supabaseUrl: null, supabaseAnonKey: null, mode: "postgres" });
 });
@@ -313,9 +400,12 @@ app.put("/api/pesilat/:id/play", async (req, res) => {
       );
     }
     
+    const pengaturan = await getPengaturanArena();
+    const autoNext = pengaturan.auto_next;
+
     await updatePesilat(id, { 
       is_playing: true, 
-      timer_running: true, 
+      timer_running: autoNext, 
       timer_last_updated_at: Date.now(), 
       is_done: false,
       timer_seconds_left: p.timer_seconds_left || p.timer_duration || 180
@@ -580,6 +670,9 @@ app.post("/api/arena/:arena/next", async (req, res) => {
       return String(a.nomor_partai || "").localeCompare(String(b.nomor_partai || ""), undefined, { numeric: true, sensitivity: "base" });
     });
     
+    const pengaturan = await getPengaturanArena();
+    const autoNext = pengaturan.auto_next;
+
     // Find currently playing
     const currentPlaying = arenaMatches.find(m => m.is_playing);
     let currentIndex = -1;
@@ -598,7 +691,42 @@ app.post("/api/arena/:arena/next", async (req, res) => {
     }
     
     if (nextMatch) {
-       await updatePesilat(nextMatch.id, { is_playing: true, timer_running: true, timer_last_updated_at: Date.now(), is_done: false, timer_seconds_left: nextMatch.timer_seconds_left || nextMatch.timer_duration || 180 });
+       await updatePesilat(nextMatch.id, { is_playing: true, timer_running: autoNext, timer_last_updated_at: Date.now(), is_done: false, timer_seconds_left: nextMatch.timer_seconds_left || nextMatch.timer_duration || 180 });
+    }
+    
+    res.json({ success: true });
+  } catch (error: any) { res.status(200).json({ error: error.message, is_500: true }); }
+});
+
+app.post("/api/arena/:arena/undo", async (req, res) => {
+  try {
+    const arenaNum = parseInt(req.params.arena, 10);
+    const all = await getPesilats();
+    const arenaMatches = all.filter(match => Number(match.arena) === arenaNum).sort((a, b) => {
+      const numA = parseFloat(a.nomor_partai);
+      const numB = parseFloat(b.nomor_partai);
+      const isNumA = !isNaN(numA) && isFinite(numA);
+      const isNumB = !isNaN(numB) && isFinite(numB);
+      if (isNumA && isNumB) return numB - numA; // Sort descending to find the last done match
+      if (isNumA) return -1;
+      if (isNumB) return 1;
+      return String(b.nomor_partai || "").localeCompare(String(a.nomor_partai || ""), undefined, { numeric: true, sensitivity: "base" });
+    });
+    
+    // Find currently playing
+    const currentPlaying = arenaMatches.find(m => m.is_playing);
+    
+    // Find the last finished match
+    const lastDoneMatch = arenaMatches.find(m => m.is_done);
+
+    if (currentPlaying) {
+       // Revert currently playing to queue
+       await updatePesilat(currentPlaying.id, { is_playing: false, timer_running: false, is_done: false });
+    }
+    
+    if (lastDoneMatch) {
+       // Set last done match back to playing
+       await updatePesilat(lastDoneMatch.id, { is_playing: true, timer_running: false, timer_last_updated_at: Date.now(), is_done: false });
     }
     
     res.json({ success: true });

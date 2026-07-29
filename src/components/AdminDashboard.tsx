@@ -13,11 +13,18 @@ interface AdminDashboardProps {
 }
 
 export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
-  const [activeTab, setActiveTab] = useState<"pesilat" | "arena">("pesilat");
+  const [activeTab, setActiveTab] = useState<"pesilat" | "arena" | "operator">("pesilat");
   const [pesilatList, setPesilatList] = useState<Pesilat[]>([]);
   const [jumlahArena, setJumlahArena] = useState<number>(3);
   const [judulAplikasi, setJudulAplikasi] = useState<string>("SISTEM BOARDING PENCAK SILAT");
   const [config, setConfig] = useState<ConfigStatus | null>(null);
+  
+  // Operator states
+  const [operatorList, setOperatorList] = useState<any[]>([]);
+  const [opUsername, setOpUsername] = useState<string>("");
+  const [opPassword, setOpPassword] = useState<string>("");
+  const [editingOpId, setEditingOpId] = useState<string | null>(null);
+  const [editingOpPassword, setEditingOpPassword] = useState<string>("");
   const [filterStatus, setFilterStatus] = useState<"queue" | "done" | "all">("queue");
   const [autoNextMatch, setAutoNextMatch] = useState<boolean>(true);
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
@@ -37,6 +44,14 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ jumlah_arena: inputJumlahArena, judul_aplikasi: inputJudulAplikasi, auto_next: newVal })
       });
+      if (!newVal) {
+        await fetch("/api/pesilat/timer-all", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ timer_running: false })
+        });
+        await fetchInitialData(jumlahArena, 1500, true);
+      }
     } catch (e) {
       console.warn("Gagal mengupdate auto_next");
     }
@@ -291,6 +306,92 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
   };
 
   
+  const fetchOperators = async () => {
+    try {
+      const res = await fetch("/api/admin/operators");
+      const data = await res.json();
+      if (Array.isArray(data)) setOperatorList(data);
+    } catch (e) {
+      console.error("Gagal memuat operator", e);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === "operator") {
+      fetchOperators();
+    }
+  }, [activeTab]);
+
+  const handleAddOperator = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!opUsername || !opPassword) return;
+    setLoading(true);
+    try {
+      const res = await fetch("/api/admin/operators", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username: opUsername, password: opPassword })
+      });
+      const data = await res.json();
+      if (data.success) {
+        setSuccess("Operator berhasil ditambahkan.");
+        setOpUsername("");
+        setOpPassword("");
+        fetchOperators();
+      } else {
+        setError(data.error || "Gagal menambahkan operator.");
+      }
+    } catch (err: any) {
+      setError(err.message || "Terjadi kesalahan.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDeleteOperator = async (id: string) => {
+    if (!confirm("Hapus operator ini?")) return;
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/admin/operators/${id}`, { method: "DELETE" });
+      if (res.ok) {
+        setSuccess("Operator berhasil dihapus.");
+        fetchOperators();
+      } else {
+        setError("Gagal menghapus operator.");
+      }
+    } catch (err: any) {
+      setError(err.message || "Terjadi kesalahan.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleUpdateOperatorPassword = async (id: string) => {
+    if (!editingOpPassword) {
+      setError("Password tidak boleh kosong.");
+      return;
+    }
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/admin/operators/${id}/password`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password: editingOpPassword })
+      });
+      if (res.ok) {
+        setSuccess("Password operator berhasil diubah.");
+        setEditingOpId(null);
+        setEditingOpPassword("");
+      } else {
+        setError("Gagal mengubah password.");
+      }
+    } catch (err: any) {
+      setError(err.message || "Terjadi kesalahan.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // Background polling to keep admin in sync with server timer
   useEffect(() => {
     const interval = setInterval(async () => {
@@ -995,6 +1096,17 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
             <Settings className="w-4 h-4" />
             Pengaturan Arena
           </button>
+          <button
+            onClick={() => { setActiveTab("operator"); setError(null); setSuccess(null); }}
+            className={`flex items-center gap-2 px-5 py-3.5 text-sm font-bold transition rounded-t-2xl ${
+              activeTab === "operator"
+                ? "bg-indigo-500/10 border-b-2 border-indigo-500 text-indigo-400"
+                : "border-b-2 border-transparent text-slate-400 hover:text-slate-200 hover:border-slate-800"
+            }`}
+          >
+            <ShieldAlert className="w-4 h-4" />
+            Pengaturan Operator
+          </button>
         </div>
 
         {/* Tab 1: KELOLA PESILAT */}
@@ -1307,98 +1419,106 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                             </div>
 
                             {/* TIMER CONTROLS */}
-                            <div className="flex flex-col lg:flex-row items-center justify-between gap-3 bg-slate-900 px-3 py-2.5 rounded-xl border border-slate-800">
-                              <div className="flex items-center gap-2">
-                                <Clock className="w-4 h-4 text-slate-400 animate-pulse" />
-                                <span className="font-mono text-base font-black text-white tracking-widest">
-                                  {Math.floor(activePesilat.timer_seconds_left / 60).toString().padStart(2, "0")}
-                                  :
-                                  {(activePesilat.timer_seconds_left % 60).toString().padStart(2, "0")}
-                                </span>
-                              </div>
+                            {autoNextMatch && (
+                              <div className="flex flex-col lg:flex-row items-center justify-between gap-3 bg-slate-900 px-3 py-2.5 rounded-xl border border-slate-800">
+                                <div className="flex items-center gap-2">
+                                  <Clock className="w-4 h-4 text-slate-400 animate-pulse" />
+                                  <span className="font-mono text-base font-black text-white tracking-widest">
+                                    {Math.floor(activePesilat.timer_seconds_left / 60).toString().padStart(2, "0")}
+                                    :
+                                    {(activePesilat.timer_seconds_left % 60).toString().padStart(2, "0")}
+                                  </span>
+                                </div>
 
-                              <div className="flex flex-wrap items-center justify-end gap-1.5 sm:gap-2 mt-2 lg:mt-0 w-full lg:w-auto">
-                                {/* Start/Pause */}
-                                <button
-                                  onClick={() => handleUpdateTimer(activePesilat.id, undefined, activePesilat.timer_seconds_left, !activePesilat.timer_running)}
-                                  className={`p-1.5 px-2.5 rounded-lg transition cursor-pointer flex items-center justify-center min-w-[75px] ${
-                                    activePesilat.timer_running
-                                      ? "bg-amber-500/20 hover:bg-amber-500/35 text-amber-400 border border-amber-500/30"
-                                      : "bg-emerald-500/20 hover:bg-emerald-500/35 text-emerald-400 border border-emerald-500/30"
-                                  }`}
-                                  title={activePesilat.timer_running ? "Pause Waktu" : "Mulai Waktu"}
-                                >
-                                  {activePesilat.timer_running ? (
-                                    <div className="flex items-center gap-1.5"><Pause className="w-3.5 h-3.5" /><span className="text-[10px] font-black uppercase tracking-widest font-mono">Jeda</span></div>
-                                  ) : (
-                                    <div className="flex items-center gap-1.5"><Play className="w-3.5 h-3.5" /><span className="text-[10px] font-black uppercase tracking-widest font-mono">Mulai</span></div>
-                                  )}
-                                </button>
-                                {/* Reset Timer */}
-                                <button
-                                  onClick={() => handleUpdateTimer(activePesilat.id, undefined, activePesilat.timer_duration, false)}
-                                  className="p-1.5 px-2 bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 rounded-lg transition cursor-pointer flex items-center justify-center gap-1.5"
-                                  title="Reset Waktu"
-                                >
-                                  <RotateCcw className="w-3.5 h-3.5" />
-                                  <span className="hidden xl:inline text-[10px] font-black uppercase tracking-widest font-mono">Reset</span>
-                                </button>
-                                {/* Panggil */}
-                                <button
-                                  onClick={() => announceMatch(arenaNum, activePesilat)}
-                                  className="p-1.5 px-2 bg-indigo-500/20 hover:bg-indigo-500/35 text-indigo-400 border border-indigo-500/30 rounded-lg transition cursor-pointer flex items-center justify-center gap-1.5"
-                                  title="Panggil Suara Pengumuman Atlit"
-                                >
-                                  <Volume2 className="w-3.5 h-3.5" />
-                                  <span className="hidden sm:inline text-[10px] font-black uppercase tracking-widest font-mono">Panggil</span>
-                                </button>
-                                {/* Next Partai */}
-                                <button
-                                  onClick={() => handleNextPartai(arenaNum)}
-                                  className="p-1.5 px-2 bg-blue-500/20 hover:bg-blue-500/35 text-blue-400 border border-blue-500/30 rounded-lg transition cursor-pointer flex items-center justify-center gap-1.5"
-                                  title="Ganti ke Partai Berikutnya di Gelanggang Ini"
-                                >
-                                  <SkipForward className="w-3.5 h-3.5" />
-                                  <span className="hidden sm:inline text-[10px] font-black uppercase tracking-widest font-mono">Next</span>
-                                </button>
-                                {/* Stop Display */}
-                                <button
-                                  onClick={() => handleStopMatch(activePesilat.id)}
-                                  className="p-1.5 px-2 bg-red-500/20 hover:bg-red-500/35 text-red-400 border border-red-500/30 rounded-lg transition cursor-pointer flex items-center justify-center gap-1.5"
-                                  title="Hentikan Display Monitor"
-                                >
-                                  <Square className="w-3.5 h-3.5" />
-                                  <span className="hidden xl:inline text-[10px] font-black uppercase tracking-widest font-mono">Mati</span>
-                                </button>
+                                <div className="flex flex-wrap items-center justify-end gap-1.5 sm:gap-2 mt-2 lg:mt-0 w-full lg:w-auto">
+                                  {/* Start/Pause */}
+                                  <button
+                                    onClick={() => handleUpdateTimer(activePesilat.id, undefined, activePesilat.timer_seconds_left, !activePesilat.timer_running)}
+                                    className={`p-1.5 px-2.5 rounded-lg transition cursor-pointer flex items-center justify-center min-w-[75px] ${
+                                      activePesilat.timer_running
+                                        ? "bg-amber-500/20 hover:bg-amber-500/35 text-amber-400 border border-amber-500/30"
+                                        : "bg-emerald-500/20 hover:bg-emerald-500/35 text-emerald-400 border border-emerald-500/30"
+                                    }`}
+                                    title={activePesilat.timer_running ? "Pause Waktu" : "Mulai Waktu"}
+                                  >
+                                    {activePesilat.timer_running ? (
+                                      <div className="flex items-center gap-1.5"><Pause className="w-3.5 h-3.5" /><span className="text-[10px] font-black uppercase tracking-widest font-mono">Jeda</span></div>
+                                    ) : (
+                                      <div className="flex items-center gap-1.5"><Play className="w-3.5 h-3.5" /><span className="text-[10px] font-black uppercase tracking-widest font-mono">Mulai</span></div>
+                                    )}
+                                  </button>
+                                  {/* Reset Timer */}
+                                  <button
+                                    onClick={() => handleUpdateTimer(activePesilat.id, undefined, activePesilat.timer_duration, false)}
+                                    className="p-1.5 px-2 bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 rounded-lg transition cursor-pointer flex items-center justify-center gap-1.5"
+                                    title="Reset Waktu"
+                                  >
+                                    <RotateCcw className="w-3.5 h-3.5" />
+                                    <span className="hidden xl:inline text-[10px] font-black uppercase tracking-widest font-mono">Reset</span>
+                                  </button>
+                                </div>
                               </div>
+                            )}
+
+                            {/* OTHER ACTIONS */}
+                            <div className="flex flex-wrap items-center justify-end gap-1.5 sm:gap-2 pt-2 border-t border-slate-800/60 mt-2">
+                              {/* Panggil */}
+                              <button
+                                onClick={() => announceMatch(arenaNum, activePesilat)}
+                                className="p-1.5 px-2 bg-indigo-500/20 hover:bg-indigo-500/35 text-indigo-400 border border-indigo-500/30 rounded-lg transition cursor-pointer flex items-center justify-center gap-1.5 flex-1 sm:flex-none"
+                                title="Panggil Suara Pengumuman Atlit"
+                              >
+                                <Volume2 className="w-3.5 h-3.5" />
+                                <span className="hidden sm:inline text-[10px] font-black uppercase tracking-widest font-mono">Panggil</span>
+                              </button>
+                              {/* Next Partai */}
+                              <button
+                                onClick={() => handleNextPartai(arenaNum)}
+                                className="p-1.5 px-2 bg-blue-500/20 hover:bg-blue-500/35 text-blue-400 border border-blue-500/30 rounded-lg transition cursor-pointer flex items-center justify-center gap-1.5 flex-1 sm:flex-none"
+                                title="Ganti ke Partai Berikutnya di Gelanggang Ini"
+                              >
+                                <SkipForward className="w-3.5 h-3.5" />
+                                <span className="hidden sm:inline text-[10px] font-black uppercase tracking-widest font-mono">Next</span>
+                              </button>
+                              {/* Stop Display */}
+                              <button
+                                onClick={() => handleStopMatch(activePesilat.id)}
+                                className="p-1.5 px-2 bg-red-500/20 hover:bg-red-500/35 text-red-400 border border-red-500/30 rounded-lg transition cursor-pointer flex items-center justify-center gap-1.5 flex-1 sm:flex-none"
+                                title="Hentikan Display Monitor"
+                              >
+                                <Square className="w-3.5 h-3.5" />
+                                <span className="hidden xl:inline text-[10px] font-black uppercase tracking-widest font-mono">Mati</span>
+                              </button>
                             </div>
 
                             {/* CUSTOM TIMER FORM */}
-                            <div className="flex items-center justify-between pt-2 border-t border-slate-800/60">
-                              <span className="text-[10px] font-bold text-slate-500 font-mono uppercase tracking-wider flex items-center gap-1">
-                                <Timer className="w-3 h-3 text-indigo-400" />
-                                Atur Durasi Baru:
-                              </span>
-                              <div className="flex items-center gap-1.5">
-                                <input
-                                  type="number"
-                                  placeholder="Detik"
-                                  defaultValue={activePesilat.timer_duration}
+                            {autoNextMatch && (
+                              <div className="flex items-center justify-between pt-2 border-t border-slate-800/60 mt-2">
+                                <span className="text-[10px] font-bold text-slate-500 font-mono uppercase tracking-wider flex items-center gap-1">
+                                  <Timer className="w-3 h-3 text-indigo-400" />
+                                  Atur Durasi Baru:
+                                </span>
+                                <div className="flex items-center gap-1.5">
+                                  <input
+                                    type="number"
+                                    placeholder="Detik"
+                                    defaultValue={activePesilat.timer_duration}
 
-                                  onKeyDown={(e) => {
-                                    if (e.key === 'Enter') {
-                                      const target = e.currentTarget;
-                                      const secs = parseInt(target.value) || 120;
-                                      handleUpdateTimer(activePesilat.id, secs, secs, false);
-                                      target.blur();
-                                    }
-                                  }}
-                                  className="w-16 bg-slate-900 border border-slate-800 text-center font-bold text-[10px] text-white rounded-lg py-1 outline-none focus:border-indigo-500 transition"
-                                  title="Tekan enter untuk menyimpan"
-                                />
-                                <span className="text-[10px] text-slate-400 font-mono">detik</span>
+                                    onKeyDown={(e) => {
+                                      if (e.key === 'Enter') {
+                                        const target = e.currentTarget;
+                                        const secs = parseInt(target.value) || 120;
+                                        handleUpdateTimer(activePesilat.id, secs, secs, false);
+                                        target.blur();
+                                      }
+                                    }}
+                                    className="w-16 bg-slate-900 border border-slate-800 text-center font-bold text-[10px] text-white rounded-lg py-1 outline-none focus:border-indigo-500 transition"
+                                    title="Tekan enter untuk menyimpan"
+                                  />
+                                  <span className="text-[10px] text-slate-400 font-mono">detik</span>
+                                </div>
                               </div>
-                            </div>
+                            )}
                           </div>
                         ) : (
                           <div className="py-6 text-center text-slate-600 font-mono text-[10px] border border-dashed border-slate-800 rounded-xl flex flex-col items-center justify-center gap-2">
@@ -1815,6 +1935,136 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                 </button>
               </div>
             </form>
+          </div>
+        )}
+
+        {/* Tab 3: PENGATURAN OPERATOR */}
+        {activeTab === "operator" && (
+          <div className="max-w-4xl mx-auto space-y-6">
+            <div className="bg-slate-900 border-2 border-slate-800 p-6 rounded-3xl shadow-2xl ring-1 ring-white/5">
+              <div className="flex items-center gap-2.5 mb-6 border-b border-slate-800 pb-4">
+                <ShieldAlert className="w-6 h-6 text-indigo-400" />
+                <div>
+                  <h3 className="text-base font-black text-white font-display uppercase tracking-wider">
+                    Manajemen Operator
+                  </h3>
+                  <p className="text-xs text-slate-400">Kelola akun operator untuk dashboard /operator</p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                {/* Form Tambah Operator */}
+                <div className="md:col-span-1 bg-slate-950/50 p-4 rounded-2xl border border-slate-800/50 h-fit">
+                  <h4 className="text-sm font-bold text-white mb-4 uppercase tracking-wider font-mono">Tambah Operator</h4>
+                  <form onSubmit={handleAddOperator} className="space-y-4">
+                    <div>
+                      <label className="block text-xs font-bold text-slate-400 mb-1.5 uppercase font-mono tracking-wider">
+                        Username
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        value={opUsername}
+                        onChange={(e) => setOpUsername(e.target.value)}
+                        className="w-full bg-slate-950 border border-slate-800 focus:border-indigo-500 text-left font-bold text-sm text-white rounded-xl px-4 py-2.5 outline-none transition"
+                        placeholder="username_operator"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-slate-400 mb-1.5 uppercase font-mono tracking-wider">
+                        Password
+                      </label>
+                      <input
+                        type="password"
+                        required
+                        value={opPassword}
+                        onChange={(e) => setOpPassword(e.target.value)}
+                        className="w-full bg-slate-950 border border-slate-800 focus:border-indigo-500 text-left font-bold text-sm text-white rounded-xl px-4 py-2.5 outline-none transition"
+                        placeholder="••••••••"
+                      />
+                    </div>
+                    <button
+                      type="submit"
+                      disabled={loading}
+                      className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-black py-2.5 rounded-xl transition text-xs uppercase tracking-wider font-display shadow-lg shadow-indigo-600/20"
+                    >
+                      {loading ? "Menyimpan..." : "Simpan Operator"}
+                    </button>
+                  </form>
+                </div>
+
+                {/* List Operator */}
+                <div className="md:col-span-2">
+                  <div className="bg-slate-950 rounded-2xl border border-slate-800 overflow-hidden">
+                    <table className="w-full text-left text-sm whitespace-nowrap">
+                      <thead>
+                        <tr className="bg-slate-900 border-b border-slate-800">
+                          <th className="px-4 py-3 font-bold text-slate-300 text-xs uppercase font-mono tracking-wider">Username</th>
+                          <th className="px-4 py-3 font-bold text-slate-300 text-xs uppercase font-mono tracking-wider text-right">Aksi</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {operatorList.length === 0 ? (
+                          <tr>
+                            <td colSpan={2} className="px-4 py-8 text-center text-slate-500 font-mono text-xs">
+                              Belum ada operator terdaftar.
+                            </td>
+                          </tr>
+                        ) : (
+                          operatorList.map((op) => (
+                            <tr key={op.id} className="border-b border-slate-800/50 hover:bg-slate-800/20 transition">
+                              <td className="px-4 py-3 font-bold text-white">
+                                {op.username}
+                                {editingOpId === op.id && (
+                                  <div className="mt-2 flex items-center gap-2">
+                                    <input
+                                      type="password"
+                                      placeholder="Password baru"
+                                      value={editingOpPassword}
+                                      onChange={(e) => setEditingOpPassword(e.target.value)}
+                                      className="bg-slate-900 border border-slate-700 focus:border-indigo-500 text-xs text-white rounded-lg px-3 py-1.5 outline-none transition w-32"
+                                    />
+                                    <button
+                                      onClick={() => handleUpdateOperatorPassword(op.id)}
+                                      disabled={loading}
+                                      className="bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-bold py-1.5 px-3 rounded-lg transition text-xs"
+                                    >
+                                      Simpan
+                                    </button>
+                                    <button
+                                      onClick={() => { setEditingOpId(null); setEditingOpPassword(""); }}
+                                      className="bg-slate-700 hover:bg-slate-600 text-white p-1.5 rounded-lg transition"
+                                    >
+                                      <X className="w-3.5 h-3.5" />
+                                    </button>
+                                  </div>
+                                )}
+                              </td>
+                              <td className="px-4 py-3 text-right">
+                                <button
+                                  onClick={() => { setEditingOpId(op.id); setEditingOpPassword(""); }}
+                                  className="bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-400 p-2 rounded-lg transition mr-2"
+                                  title="Ubah Password"
+                                >
+                                  <Edit2 className="w-4 h-4" />
+                                </button>
+                                <button
+                                  onClick={() => handleDeleteOperator(op.id)}
+                                  className="bg-red-500/10 hover:bg-red-500/20 text-red-400 p-2 rounded-lg transition"
+                                  title="Hapus Operator"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              </td>
+                            </tr>
+                          ))
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         )}
       </div>

@@ -8,6 +8,7 @@ export default function PublicDisplay() {
   const [pesilatList, setPesilatList] = useState<Pesilat[]>([]);
   const [jumlahArena, setJumlahArena] = useState<number>(3);
   const [judulAplikasi, setJudulAplikasi] = useState<string>("SISTEM BOARDING PENCAK SILAT");
+  const [autoNextMatch, setAutoNextMatch] = useState<boolean>(true);
   const [config, setConfig] = useState<ConfigStatus | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
@@ -372,8 +373,9 @@ export default function PublicDisplay() {
       const arenaData = await arenaRes.json();
       const initialArenasCount = parseJumlahArena(arenaData);
       setJumlahArena(initialArenasCount);
-      if (arenaData && arenaData.length > 0 && arenaData[0].judul_aplikasi) {
-        setJudulAplikasi(arenaData[0].judul_aplikasi);
+      if (arenaData && arenaData.length > 0) {
+        if (arenaData[0].judul_aplikasi) setJudulAplikasi(arenaData[0].judul_aplikasi);
+        if (arenaData[0].auto_next !== undefined) setAutoNextMatch(arenaData[0].auto_next);
       }
 
       // Ambil data pesilat awal
@@ -514,8 +516,9 @@ export default function PublicDisplay() {
         }
         
         setJumlahArena(parseJumlahArena(arenaData));
-        if (arenaData && arenaData.length > 0 && arenaData[0].judul_aplikasi) {
-          setJudulAplikasi(arenaData[0].judul_aplikasi);
+        if (arenaData && arenaData.length > 0) {
+          if (arenaData[0].judul_aplikasi) setJudulAplikasi(arenaData[0].judul_aplikasi);
+          if (arenaData[0].auto_next !== undefined) setAutoNextMatch(arenaData[0].auto_next);
         }
         setLastUpdated(new Date());
       } catch (err) {
@@ -934,18 +937,26 @@ export default function PublicDisplay() {
 
                                 {/* Tengah: Timer */}
                                 <div className="col-span-2 flex flex-col items-center justify-center bg-slate-900 border border-slate-800 rounded-lg py-1 px-0.5 text-center min-w-[40px]">
-                                  <div className={`font-mono ${layout.timerText} font-black leading-none ${
-                                    playingPesilat.timer_seconds_left <= 10 && playingPesilat.timer_running
-                                      ? "text-red-500 animate-pulse drop-shadow-[0_0_4px_rgba(239,68,68,0.5)]"
-                                      : "text-emerald-400"
-                                  }`}>
-                                    {Math.floor(playingPesilat.timer_seconds_left / 60).toString().padStart(2, "0")}
-                                    :
-                                    {(playingPesilat.timer_seconds_left % 60).toString().padStart(2, "0")}
-                                  </div>
-                                  <span className="text-[5px] sm:text-[6px] text-slate-500 font-mono font-bold uppercase tracking-wider scale-90 mt-0.5">
-                                    {playingPesilat.timer_running ? "RUN" : "PAUSE"}
-                                  </span>
+                                  {autoNextMatch ? (
+                                    <>
+                                      <div className={`font-mono ${layout.timerText} font-black leading-none ${
+                                        playingPesilat.timer_seconds_left <= 10 && playingPesilat.timer_running
+                                          ? "text-red-500 animate-pulse drop-shadow-[0_0_4px_rgba(239,68,68,0.5)]"
+                                          : "text-emerald-400"
+                                      }`}>
+                                        {Math.floor(playingPesilat.timer_seconds_left / 60).toString().padStart(2, "0")}
+                                        :
+                                        {(playingPesilat.timer_seconds_left % 60).toString().padStart(2, "0")}
+                                      </div>
+                                      <span className="text-[5px] sm:text-[6px] text-slate-500 font-mono font-bold uppercase tracking-wider scale-90 mt-0.5">
+                                        {playingPesilat.timer_running ? "RUN" : "PAUSE"}
+                                      </span>
+                                    </>
+                                  ) : (
+                                    <div className={`font-mono ${layout.timerText} font-black text-slate-600 leading-none`}>
+                                      VS
+                                    </div>
+                                  )}
                                 </div>
 
                                 {/* Kanan: Sudut Merah */}
@@ -966,7 +977,7 @@ export default function PublicDisplay() {
                               <div className="grid grid-cols-12 gap-1 sm:gap-2 items-center">
                                 
                                 {/* Kiri/Tengah: Detail Atlet */}
-                                <div className={`col-span-9 bg-indigo-600/10 ${layout.competitorPadding} border-amber-600 rounded-r-lg min-w-0 shadow-md`}>
+                                <div className={`${autoNextMatch ? 'col-span-9' : 'col-span-12'} bg-indigo-600/10 ${layout.competitorPadding} border-amber-600 rounded-r-lg min-w-0 shadow-md`}>
                                   <span className="text-indigo-400 font-mono text-[7px] sm:text-[9px] font-black uppercase tracking-widest block mb-0.5">
                                     Pesilat Solo
                                   </span>
@@ -979,20 +990,22 @@ export default function PublicDisplay() {
                                 </div>
 
                                 {/* Kanan: Timer */}
-                                <div className="col-span-3 flex flex-col items-center justify-center bg-slate-900 border border-slate-800 rounded-lg py-1 sm:py-2 px-1 text-center">
-                                  <div className={`font-mono ${layout.timerText} font-black leading-none ${
-                                    playingPesilat.timer_seconds_left <= 10 && playingPesilat.timer_running
-                                      ? "text-red-500 animate-pulse drop-shadow-[0_0_4px_rgba(239,68,68,0.5)]"
-                                      : "text-emerald-400"
-                                  }`}>
-                                    {Math.floor(playingPesilat.timer_seconds_left / 60).toString().padStart(2, "0")}
-                                    :
-                                    {(playingPesilat.timer_seconds_left % 60).toString().padStart(2, "0")}
+                                {autoNextMatch && (
+                                  <div className="col-span-3 flex flex-col items-center justify-center bg-slate-900 border border-slate-800 rounded-lg py-1 sm:py-2 px-1 text-center">
+                                    <div className={`font-mono ${layout.timerText} font-black leading-none ${
+                                      playingPesilat.timer_seconds_left <= 10 && playingPesilat.timer_running
+                                        ? "text-red-500 animate-pulse drop-shadow-[0_0_4px_rgba(239,68,68,0.5)]"
+                                        : "text-emerald-400"
+                                    }`}>
+                                      {Math.floor(playingPesilat.timer_seconds_left / 60).toString().padStart(2, "0")}
+                                      :
+                                      {(playingPesilat.timer_seconds_left % 60).toString().padStart(2, "0")}
+                                    </div>
+                                    <span className="text-[5px] sm:text-[7px] text-slate-500 font-mono font-bold uppercase tracking-wider mt-0.5">
+                                      {playingPesilat.timer_running ? "RUN" : "PAUSE"}
+                                    </span>
                                   </div>
-                                  <span className="text-[5px] sm:text-[7px] text-slate-500 font-mono font-bold uppercase tracking-wider mt-0.5">
-                                    {playingPesilat.timer_running ? "RUN" : "PAUSE"}
-                                  </span>
-                                </div>
+                                )}
                               </div>
                             )}
                           </div>
