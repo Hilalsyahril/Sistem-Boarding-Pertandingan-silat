@@ -696,8 +696,8 @@ export default function PublicDisplay() {
     <div className="h-screen w-screen max-h-screen max-w-full overflow-hidden bg-gradient-to-tr from-slate-950 via-slate-900 to-slate-950 text-white font-sans p-2 sm:p-3 select-none flex flex-col justify-between">
       <audio ref={audioRef} className="hidden" preload="auto" />
       {/* HEADER UTAMA - VIBRANT PALETTE INDIGO HEADER WITH WHITE ROTATING LOGO */}
-      <header className="p-2.5 sm:p-3 rounded-2xl flex flex-col md:flex-row md:items-center md:justify-between border-b-2 sm:border-b-4 border-amber-600 shadow-xl mb-1.5 sm:mb-2.5 space-x-2 space-y-2" style={{ backgroundColor: "#f59e0b", backgroundImage: "linear-gradient(to bottom right, #facc15, #f59e0b, #dc2626)" }}>
-        <div className="flex items-center space-x-3 space-y-3">
+      <header className="p-2.5 sm:p-3 rounded-2xl flex flex-col md:flex-row md:items-center md:justify-between border-b-2 sm:border-b-4 border-amber-600 shadow-xl mb-1.5 sm:mb-2.5 gap-3" style={{ backgroundColor: "#f59e0b", backgroundImage: "linear-gradient(to bottom right, #facc15, #f59e0b, #dc2626)" }}>
+        <div className="flex items-center gap-3">
           <div>
             <h1 className="text-sm sm:text-base md:text-lg font-black tracking-tight uppercase text-white font-display">
               {judulAplikasi}
@@ -709,8 +709,8 @@ export default function PublicDisplay() {
         </div>
 
         {/* Status Mode Real-time & Clock */}
-        <div className="flex flex-wrap items-center space-x-2 space-y-2 sm:space-x-3 space-y-3 text-[10px] sm:text-xs">
-          <div className="text-left flex items-center space-x-1 space-y-1.5">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3 text-[10px] sm:text-xs">
+          <div className="text-left flex items-center gap-1.5">
             <span className="text-[8px] text-indigo-300 font-bold uppercase tracking-wider font-mono hidden xs:inline">Update:</span>
             <span className="font-mono font-bold text-white bg-indigo-850 px-2 py-0.5 rounded border border-indigo-600/50">{lastUpdated.toLocaleTimeString()}</span>
           </div>
@@ -723,7 +723,7 @@ export default function PublicDisplay() {
               setIsAudioEnabled(prev => !prev);
               if (!hasInteracted) handleInteraction();
             }}
-            className={`flex items-center space-x-1 space-y-1.5 px-2.5 py-1 rounded-lg font-bold text-[9px] sm:text-[10px] uppercase tracking-wider transition cursor-pointer shadow-md border ${
+            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg font-bold text-[9px] sm:text-[10px] uppercase tracking-wider transition cursor-pointer shadow-md border ${
               isAudioEnabled 
                 ? "bg-amber-400 text-neutral-950 border-amber-300 hover:bg-amber-300" 
                 : "bg-slate-850 text-slate-400 border-slate-700/50 hover:bg-slate-800"
@@ -746,12 +746,12 @@ export default function PublicDisplay() {
           <div className="hidden md:block h-6 w-px bg-indigo-500/50"></div>
 
           {config?.configured ? (
-            <div className="bg-emerald-500 text-white px-2.5 py-1 rounded-lg flex items-center space-x-1 space-y-1.5 shadow-lg font-bold text-[9px] sm:text-[10px] uppercase tracking-wider">
+            <div className="bg-emerald-500 text-white px-2.5 py-1 rounded-lg flex items-center gap-1.5 shadow-lg font-bold text-[9px] sm:text-[10px] uppercase tracking-wider">
               <span className="w-1.5 h-1.5 bg-white rounded-full animate-pulse"></span>
               <span>Live</span>
             </div>
           ) : (
-            <div className="bg-rose-600 text-white px-2.5 py-1 rounded-lg flex items-center space-x-1 space-y-1.5 shadow-lg font-bold text-[9px] sm:text-[10px] uppercase tracking-wider">
+            <div className="bg-rose-600 text-white px-2.5 py-1 rounded-lg flex items-center gap-1.5 shadow-lg font-bold text-[9px] sm:text-[10px] uppercase tracking-wider">
               <span className="w-1.5 h-1.5 bg-white rounded-full"></span>
               <span>Terputus</span>
             </div>
