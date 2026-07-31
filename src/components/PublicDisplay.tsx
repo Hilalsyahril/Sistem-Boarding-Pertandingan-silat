@@ -828,6 +828,11 @@ export default function PublicDisplay() {
               const waitingQueue = pesilatInArena
                 .filter(p => !p.is_playing && !p.is_done)
                 .sort((a, b) => {
+                  const urutA = a.no_urut || 0;
+                  const urutB = b.no_urut || 0;
+                  if (urutA !== urutB) {
+                    return urutA - urutB;
+                  }
                   const numA = parseFloat(a.nomor_partai);
                   const numB = parseFloat(b.nomor_partai);
                   const isNumA = !isNaN(numA) && isFinite(numA);

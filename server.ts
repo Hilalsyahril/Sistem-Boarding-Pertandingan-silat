@@ -107,11 +107,17 @@ async function initDb() {
     } catch(e) {
       // Ignored if already text or column doesn't exist yet
     }
+    try {
+      await pgPool.query(`ALTER TABLE pesilat ADD COLUMN no_urut INTEGER DEFAULT 0`);
+    } catch(e) {
+      // ignore
+    }
   } catch(e) {
     // ignore duplicate column
   }
   await pgPool.query(`CREATE TABLE IF NOT EXISTS pesilat (
       id VARCHAR(255) PRIMARY KEY,
+      no_urut INTEGER DEFAULT 0,
       nomor_partai VARCHAR(255),
       nama_pesilat VARCHAR(255),
       kontingen VARCHAR(255),
@@ -196,6 +202,11 @@ async function getPesilats() {
     if (a.arena !== b.arena) {
       return (Number(a.arena) || 0) - (Number(b.arena) || 0);
     }
+    const urutA = Number(a.no_urut) || 0;
+    const urutB = Number(b.no_urut) || 0;
+    if (urutA !== urutB) {
+      return urutA - urutB;
+    }
     const numA = parseInt((a.nomor_partai || "").toString().replace(/[^0-9]/g, ''), 10) || 0;
     const numB = parseInt((b.nomor_partai || "").toString().replace(/[^0-9]/g, ''), 10) || 0;
     return numA - numB;
@@ -212,12 +223,12 @@ async function insertPesilat(p: any) {
   if (!pgPool) return;
   await pgPool.query(`
     INSERT INTO pesilat (
-      id, nomor_partai, nama_pesilat, kontingen, nama_pesilat_biru, kontingen_biru,
+      id, no_urut, nomor_partai, nama_pesilat, kontingen, nama_pesilat_biru, kontingen_biru,
       kelas, kategori, gender, arena, is_playing, timer_duration, timer_seconds_left,
       timer_running, timer_last_updated_at, is_done
-    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
   `, [
-    p.id, p.nomor_partai, p.nama_pesilat, p.kontingen, p.nama_pesilat_biru || "", p.kontingen_biru || "",
+    p.id, p.no_urut || 0, p.nomor_partai, p.nama_pesilat, p.kontingen, p.nama_pesilat_biru || "", p.kontingen_biru || "",
     p.kelas, p.kategori, p.gender, p.arena, p.is_playing ? true : false, p.timer_duration, p.timer_seconds_left,
     p.timer_running ? true : false, p.timer_last_updated_at || null, p.is_done ? true : false
   ]);
