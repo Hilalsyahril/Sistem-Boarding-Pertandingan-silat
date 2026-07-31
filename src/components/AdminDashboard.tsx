@@ -627,8 +627,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
             });
           };
 
-          const noUrutKey = findKeyExactOrIncludes(["No. urut", "No Urut", "No.Urut"], ["urut"]);
-          const nomorPartaiKey = findKeyExactOrIncludes(["Nomor Partai", "No Partai"], ["partai", "no", "nomor"], ["urut"]);
+          const nomorPartaiKey = findKeyExactOrIncludes(["Nomor Partai", "No Partai"], ["partai", "no", "nomor"]);
           const namaBiruKey = findKeyExactOrIncludes(["Sudut Biru (Nama Pesilat)", "Nama Pesilat Biru"], ["biru"], ["kontingen"]);
           const kontingenBiruKey = findKeyExactOrIncludes(["Sudut Biru (Kontingen)", "Kontingen Biru"], ["biru"], ["nama", "pesilat", "atlit"]);
           const namaMerahKey = findKeyExactOrIncludes(["Sudut Merah (Nama Pesilat)", "Nama Pesilat Merah"], ["merah"], ["kontingen"]);
@@ -641,8 +640,6 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
           const durationKey = findKeyExactOrIncludes(["Durasi Timer (Detik)", "Durasi Timer", "Timer"], ["durasi", "waktu", "timer", "detik"]);
 
           const arenaVal = arenaKey ? String(row[arenaKey]).trim() : "1";
-          const noUrutVal = noUrutKey ? parseInt(String(row[noUrutKey]).replace(/\D/g, ''), 10) : 0;
-          const noUrut = isNaN(noUrutVal) ? 0 : noUrutVal;
           const nomorPartai = (nomorPartaiKey ? String(row[nomorPartaiKey]) : "01").trim();
           
           let namaMerah = (namaMerahKey ? String(row[namaMerahKey]) : "").trim();
@@ -671,7 +668,6 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
 
           return {
             arena: arenaVal,
-            no_urut: noUrut,
             nomor_partai: nomorPartai,
             nama_pesilat: namaMerah,
             kontingen: kontingenMerah,
@@ -1066,11 +1062,6 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
     .sort((a, b) => {
       if (a.arena !== b.arena) {
         return a.arena - b.arena;
-      }
-      const urutA = a.no_urut || 0;
-      const urutB = b.no_urut || 0;
-      if (urutA !== urutB) {
-        return urutA - urutB;
       }
       const numA = parseFloat(a.nomor_partai);
       const numB = parseFloat(b.nomor_partai);

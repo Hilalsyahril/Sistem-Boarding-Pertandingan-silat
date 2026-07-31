@@ -6,7 +6,6 @@
 -- 1. Buat Tabel pesilat
 CREATE TABLE IF NOT EXISTS public.pesilat (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    no_urut INT4 DEFAULT 0,
     nomor_partai TEXT DEFAULT '01',
     nama_pesilat TEXT NOT NULL,       -- Sudut Merah
     kontingen TEXT NOT NULL,          -- Sudut Merah

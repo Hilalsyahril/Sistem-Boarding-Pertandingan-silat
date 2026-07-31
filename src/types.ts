@@ -14,7 +14,6 @@ export interface Pesilat {
   timer_seconds_left: number; // in seconds
   timer_running: boolean;
   timer_last_updated_at?: number;
-  no_urut?: number;
   is_done?: boolean;
   created_at?: string;
 }
