@@ -629,10 +629,10 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
           };
 
           const nomorPartaiKey = findKeyExactOrIncludes(["Nomor Partai", "No Partai"], ["partai", "no", "nomor"]);
-          const namaBiruKey = findKeyExactOrIncludes(["Sudut Biru (Nama Pesilat)", "Nama Pesilat Biru"], ["biru"], ["kontingen"]);
-          const kontingenBiruKey = findKeyExactOrIncludes(["Sudut Biru (Kontingen)", "Kontingen Biru"], ["biru"], ["nama", "pesilat", "atlit"]);
-          const namaMerahKey = findKeyExactOrIncludes(["Sudut Merah (Nama Pesilat)", "Nama Pesilat Merah"], ["merah"], ["kontingen"]);
-          const kontingenMerahKey = findKeyExactOrIncludes(["Sudut Merah (Kontingen)", "Kontingen Merah"], ["merah"], ["nama", "pesilat", "atlit"]);
+          const namaMerahKey = findKeyExactOrIncludes(["Sudut Merah (Nama Pesilat)", "Nama Pesilat Merah", "Nama Pesilat", "Nama Atlit", "Nama Atlet", "Nama"], ["merah", "nama pesilat", "nama atlit", "nama"], ["kontingen", "biru", "asal"]);
+          const kontingenMerahKey = findKeyExactOrIncludes(["Sudut Merah (Kontingen)", "Kontingen Merah", "Kontingen", "Asal"], ["merah", "kontingen", "asal"], ["nama", "pesilat", "atlit", "biru"]);
+          const namaBiruKey = findKeyExactOrIncludes(["Sudut Biru (Nama Pesilat)", "Nama Pesilat Biru", "Nama Pesilat 2", "Nama 2"], ["biru", "nama pesilat 2"], ["kontingen", "merah", "asal"]);
+          const kontingenBiruKey = findKeyExactOrIncludes(["Sudut Biru (Kontingen)", "Kontingen Biru", "Kontingen 2", "Asal 2"], ["biru", "kontingen 2"], ["nama", "pesilat", "atlit", "merah"]);
           
           const kelasKey = findKeyExactOrIncludes(["Kelas"], ["kelas"]);
           const kategoriKey = findKeyExactOrIncludes(["Kategori"], ["kategori"]);
@@ -680,7 +680,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
             timer_duration: duration,
             created_at: baseTime + index
           };
-        }).filter(item => item.nama_pesilat || item.nama_pesilat_biru);
+        }); // Removed filter so it can import even if mapping is slightly off
 
         if (mappedItems.length === 0) {
           throw new Error("Format kolom Excel tidak cocok atau tidak ada baris data valid (salah satu nama atlet harus diisi).");
@@ -692,16 +692,17 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
           body: JSON.stringify({ items: mappedItems })
         });
 
-        let resData = {};
+        let resData: any = {};
         try {
           resData = await res.json();
         } catch (e) {}
-        if (!res.ok) {
-          throw new Error((resData as any).error || "Gagal menyimpan data import ke server.");
+        
+        if (!res.ok || resData.status === "error" || resData.error) {
+          throw new Error(resData.message || resData.error || "Gagal menyimpan data import ke server.");
         }
 
-        setSuccess(`Berhasil mengimpor ${(resData as any).count} data partai/pesilat dari Excel!`);
-        fetchInitialData();
+        setSuccess(`Berhasil mengimpor ${resData.count} data partai/pesilat dari Excel!`);
+        await fetchInitialData();
       } catch (err: any) {
         setError(err.message || "Gagal mengimpor file Excel.");
       } finally {

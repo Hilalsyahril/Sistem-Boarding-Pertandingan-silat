@@ -411,8 +411,10 @@ app.post("/api/pesilat/batch", async (req, res) => {
         insertedCount++;
       }
     }
-    res.json({ success: true, count: insertedCount, skipped: items.length - insertedCount });
-  } catch (error: any) { res.status(200).json({ error: error.message, is_500: true }); }
+    res.json({ status: "success", message: "Data berhasil diimport", count: insertedCount, skipped: items.length - insertedCount });
+  } catch (error: any) { 
+    res.status(400).json({ status: "error", message: error.message || "Gagal mengimpor data" }); 
+  }
 });
 
 app.put("/api/pesilat/:id", async (req, res) => {
