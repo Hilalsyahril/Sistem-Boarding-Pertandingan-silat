@@ -44,4 +44,4 @@ jobs:
           local-dir: ./deploy_folder/
           # PERHATIAN: Sesuaikan server-dir dengan path folder aplikasi Node.js di cPanel Anda
           # Contoh: /silat-app/ (Jika aplikasi Anda berada di folder silat-app pada root FTP)
-          server-dir: /domains/boardingsilat.mra.my.id/public_html
+          server-dir: /domains/boardingsilat.mra.my.id/public_html/
