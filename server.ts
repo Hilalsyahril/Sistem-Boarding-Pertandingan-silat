@@ -790,7 +790,8 @@ async function startServer() {
 
   const isProd = process.env.NODE_ENV === "production" || !fs.existsSync(path.join(process.cwd(), "vite.config.ts"));
   if (!isProd) {
-    const { createServer: createViteServer } = await import("vite");
+    const viteModule = "vite";
+    const { createServer: createViteServer } = await import(viteModule);
     const vite = await createViteServer({ server: { middlewareMode: true }, appType: "spa" });
     app.use(vite.middlewares);
   } else {

@@ -16,6 +16,10 @@ os.system('cp package_cpanel.json deploy_folder/package.json')
 os.system('cp app_cpanel.js deploy_folder/app.js')
 os.system('cp schema.sql deploy_folder/schema.sql')
 
+# Install production node_modules in deploy_folder
+print("Installing production dependencies into deploy_folder...")
+os.system('cd deploy_folder && npm install --omit=dev')
+
 if os.path.exists('public/deploy_cpanel.zip'):
     os.remove('public/deploy_cpanel.zip')
 
