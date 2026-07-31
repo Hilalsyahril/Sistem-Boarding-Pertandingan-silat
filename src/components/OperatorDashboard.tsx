@@ -235,7 +235,10 @@ export default function OperatorDashboard({ onLogout, username }: { onLogout: ()
                     <h3 className="font-black text-sm uppercase tracking-wider text-white">Arena {arenaNum}</h3>
                   </div>
                   {activePesilat ? (
-                    <div className="bg-indigo-500/10 px-2 py-1 rounded-md border border-indigo-500/20">
+                    <div className="bg-indigo-500/10 px-2 py-1 rounded-md border border-indigo-500/20 flex gap-2">
+                      {activePesilat.nomor_urut !== undefined && activePesilat.nomor_urut !== null && (
+                        <span className="text-[9px] font-bold text-emerald-400 font-mono">#{activePesilat.nomor_urut}</span>
+                      )}
                       <span className="text-[9px] font-bold text-indigo-300 font-mono">Partai: {activePesilat.nomor_partai}</span>
                     </div>
                   ) : (
