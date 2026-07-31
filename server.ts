@@ -557,14 +557,9 @@ app.put("/api/pesilat/:id/timeout", async (req, res) => {
       const numA = Number(a.nomor_urut) || 0;
       const numB = Number(b.nomor_urut) || 0;
       if (numA !== numB) return numA - numB;
-      const pA = parseFloat(a.nomor_partai);
-      const pB = parseFloat(b.nomor_partai);
-      const isPA = !isNaN(pA) && isFinite(pA);
-      const isPB = !isNaN(pB) && isFinite(pB);
-      if (isPA && isPB) return pA - pB;
-      if (isPA) return -1;
-      if (isPB) return 1;
-      return String(a.nomor_partai || "").localeCompare(String(b.nomor_partai || ""), undefined, { numeric: true, sensitivity: "base" });
+      const pA = parseInt((a.nomor_partai || "").toString().replace(/[^0-9]/g, ''), 10) || 0;
+      const pB = parseInt((b.nomor_partai || "").toString().replace(/[^0-9]/g, ''), 10) || 0;
+      return pA - pB;
     });
     const currentIndex = arenaMatches.findIndex(match => match.id === id);
     if (autoNext && currentIndex !== -1) {
@@ -757,14 +752,9 @@ app.post("/api/arena/:arena/next", async (req, res) => {
       const numA = Number(a.nomor_urut) || 0;
       const numB = Number(b.nomor_urut) || 0;
       if (numA !== numB) return numA - numB;
-      const pA = parseFloat(a.nomor_partai);
-      const pB = parseFloat(b.nomor_partai);
-      const isPA = !isNaN(pA) && isFinite(pA);
-      const isPB = !isNaN(pB) && isFinite(pB);
-      if (isPA && isPB) return pA - pB;
-      if (isPA) return -1;
-      if (isPB) return 1;
-      return String(a.nomor_partai || "").localeCompare(String(b.nomor_partai || ""), undefined, { numeric: true, sensitivity: "base" });
+      const pA = parseInt((a.nomor_partai || "").toString().replace(/[^0-9]/g, ''), 10) || 0;
+      const pB = parseInt((b.nomor_partai || "").toString().replace(/[^0-9]/g, ''), 10) || 0;
+      return pA - pB;
     });
     
     const pengaturan = await getPengaturanArena();
@@ -802,15 +792,10 @@ app.post("/api/arena/:arena/undo", async (req, res) => {
     const arenaMatches = all.filter(match => Number(match.arena) === arenaNum).sort((a, b) => {
       const numA = Number(a.nomor_urut) || 0;
       const numB = Number(b.nomor_urut) || 0;
-      if (numA !== numB) return numB - numA; // Sort descending
-      const pA = parseFloat(a.nomor_partai);
-      const pB = parseFloat(b.nomor_partai);
-      const isPA = !isNaN(pA) && isFinite(pA);
-      const isPB = !isNaN(pB) && isFinite(pB);
-      if (isPA && isPB) return pB - pA; // Sort descending to find the last done match
-      if (isPA) return -1;
-      if (isPB) return 1;
-      return String(b.nomor_partai || "").localeCompare(String(a.nomor_partai || ""), undefined, { numeric: true, sensitivity: "base" });
+      if (numA !== numB) return numB - numA;
+      const pA = parseInt((a.nomor_partai || "").toString().replace(/[^0-9]/g, ''), 10) || 0;
+      const pB = parseInt((b.nomor_partai || "").toString().replace(/[^0-9]/g, ''), 10) || 0;
+      return pB - pA;
     });
     
     // Find currently playing

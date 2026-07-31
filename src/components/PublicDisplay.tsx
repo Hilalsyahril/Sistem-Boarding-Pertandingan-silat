@@ -817,14 +817,9 @@ export default function PublicDisplay() {
                   const numA = Number(a.nomor_urut) || 0;
                   const numB = Number(b.nomor_urut) || 0;
                   if (numA !== numB) return numA - numB;
-                  const pA = parseFloat(a.nomor_partai);
-                  const pB = parseFloat(b.nomor_partai);
-                  const isPA = !isNaN(pA) && isFinite(pA);
-                  const isPB = !isNaN(pB) && isFinite(pB);
-                  if (isPA && isPB) return pA - pB;
-                  if (isPA) return -1;
-                  if (isPB) return 1;
-                  return String(a.nomor_partai || "").localeCompare(String(b.nomor_partai || ""), undefined, { numeric: true, sensitivity: "base" });
+                  const pA = parseInt((a.nomor_partai || "").toString().replace(/[^0-9]/g, ''), 10) || 0;
+                  const pB = parseInt((b.nomor_partai || "").toString().replace(/[^0-9]/g, ''), 10) || 0;
+                  return pA - pB;
                 });
 
               const colors = ["bg-gradient-to-r from-yellow-400 via-amber-500 to-red-600", "bg-gradient-to-r from-amber-500 via-red-500 to-red-700", "bg-gradient-to-l from-yellow-400 via-amber-500 to-red-600"];

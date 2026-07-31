@@ -53,8 +53,9 @@ jobs:
         server: ${{ secrets.FTP_SERVER }}
         username: ${{ secrets.FTP_USERNAME }}
         password: ${{ secrets.FTP_PASSWORD }}
-        server-dir: /domains/boardingsilat.mra.my.id/public_html/
+        server-dir: domains/boardingsilat.mra.my.id/public_html/
         local-dir: ./deploy_folder/
+        dangerous-clean-slate: true
         exclude: |
           **/.htaccess
           .htaccess

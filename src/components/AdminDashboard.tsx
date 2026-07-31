@@ -1024,16 +1024,12 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
       if (a.arena !== b.arena) {
         return a.arena - b.arena;
       }
-      const numA = parseFloat(a.nomor_partai);
-      const numB = parseFloat(b.nomor_partai);
-      const isNumA = !isNaN(numA) && isFinite(numA);
-      const isNumB = !isNaN(numB) && isFinite(numB);
-      if (isNumA && isNumB) {
-        return numA - numB;
-      }
-      if (isNumA) return -1;
-      if (isNumB) return 1;
-      return a.nomor_partai.localeCompare(b.nomor_partai, undefined, { numeric: true, sensitivity: "base" });
+      const numA = Number(a.nomor_urut) || 0;
+      const numB = Number(b.nomor_urut) || 0;
+      if (numA !== numB) return numA - numB;
+      const pA = parseInt((a.nomor_partai || "").toString().replace(/[^0-9]/g, ''), 10) || 0;
+      const pB = parseInt((b.nomor_partai || "").toString().replace(/[^0-9]/g, ''), 10) || 0;
+      return pA - pB;
     });
 
   return (
