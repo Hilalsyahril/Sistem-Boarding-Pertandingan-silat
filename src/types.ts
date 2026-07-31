@@ -1,6 +1,5 @@
 export interface Pesilat {
   id: string;
-  nomor_urut?: number;
   nomor_partai: string;
   nama_pesilat: string; // Sudut Merah
   kontingen: string;    // Sudut Merah

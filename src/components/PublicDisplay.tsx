@@ -886,7 +886,7 @@ export default function PublicDisplay() {
                             <div className="space-y-1">
                               {waitingQueue.slice(0, 2).map((item) => (
                                 <div key={item.id} className="text-[9px] sm:text-xs flex justify-between text-slate-300 font-medium truncate">
-                                  <span className="truncate">{item.nomor_urut !== undefined && item.nomor_urut !== null ? `#${item.nomor_urut} ` : ''}P-{item.nomor_partai} • {item.nama_pesilat && item.nama_pesilat_biru ? `${item.nama_pesilat} vs ${item.nama_pesilat_biru}` : item.nama_pesilat || item.nama_pesilat_biru}</span>
+                                  <span className="truncate">P-{item.nomor_partai} • {item.nama_pesilat && item.nama_pesilat_biru ? `${item.nama_pesilat} vs ${item.nama_pesilat_biru}` : item.nama_pesilat || item.nama_pesilat_biru}</span>
                                   <span className="text-[8px] sm:text-[9px] text-indigo-400 font-mono uppercase shrink-0 ml-1">G-{item.arena}</span>
                                 </div>
                               ))}
@@ -1076,7 +1076,7 @@ export default function PublicDisplay() {
                                 className={`bg-slate-950/20 ${layout.queueItemPadding} rounded flex justify-between items-center text-[7px] sm:text-[8px] border border-white/5`}
                               >
                                 <span className="font-bold text-slate-400 truncate max-w-[80%] uppercase">
-                                  {pesilat.nomor_urut !== undefined && pesilat.nomor_urut !== null ? `#${pesilat.nomor_urut} ` : ''}P-{pesilat.nomor_partai || "00"} • {pesilat.nama_pesilat && pesilat.nama_pesilat_biru ? `${pesilat.nama_pesilat} vs ${pesilat.nama_pesilat_biru}` : pesilat.nama_pesilat || pesilat.nama_pesilat_biru}
+                                  P-{pesilat.nomor_partai || "00"} • {pesilat.nama_pesilat && pesilat.nama_pesilat_biru ? `${pesilat.nama_pesilat} vs ${pesilat.nama_pesilat_biru}` : pesilat.nama_pesilat || pesilat.nama_pesilat_biru}
                                 </span>
                                 <span className="text-[6px] text-indigo-400 font-mono font-bold uppercase shrink-0">
                                   {pesilat.kelas.split(" ")[0] || pesilat.kelas}

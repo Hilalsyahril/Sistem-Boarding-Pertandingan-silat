@@ -627,8 +627,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
             });
           };
 
-          const nomorUrutKey = findKeyExactOrIncludes(["Nomor Urut", "No Urut"], ["urut"], ["partai"]);
-          const nomorPartaiKey = findKeyExactOrIncludes(["Nomor Partai", "No Partai"], ["partai", "no", "nomor"], ["urut"]);
+          const nomorPartaiKey = findKeyExactOrIncludes(["Nomor Partai", "No Partai"], ["partai", "no", "nomor"]);
           const namaBiruKey = findKeyExactOrIncludes(["Sudut Biru (Nama Pesilat)", "Nama Pesilat Biru"], ["biru"], ["kontingen"]);
           const kontingenBiruKey = findKeyExactOrIncludes(["Sudut Biru (Kontingen)", "Kontingen Biru"], ["biru"], ["nama", "pesilat", "atlit"]);
           const namaMerahKey = findKeyExactOrIncludes(["Sudut Merah (Nama Pesilat)", "Nama Pesilat Merah"], ["merah"], ["kontingen"]);
@@ -641,7 +640,6 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
           const durationKey = findKeyExactOrIncludes(["Durasi Timer (Detik)", "Durasi Timer", "Timer"], ["durasi", "waktu", "timer", "detik"]);
 
           const arenaVal = arenaKey ? String(row[arenaKey]).trim() : "1";
-          const nomorUrutVal = nomorUrutKey ? parseInt(String(row[nomorUrutKey]).replace(/\D/g, ''), 10) : null;
           const nomorPartai = (nomorPartaiKey ? String(row[nomorPartaiKey]) : "01").trim();
           
           let namaMerah = (namaMerahKey ? String(row[namaMerahKey]) : "").trim();
@@ -670,7 +668,6 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
 
           return {
             arena: arenaVal,
-            nomor_urut: !isNaN(nomorUrutVal as number) ? nomorUrutVal : null,
             nomor_partai: nomorPartai,
             nama_pesilat: namaMerah,
             kontingen: kontingenMerah,
@@ -724,7 +721,6 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
     // 1. Buat data dummy sebagai contoh pengisian
     const templateData = [
       {
-        "Nomor Urut": 1,
         "Nomor Partai": "01",
         "Sudut Biru (Nama Pesilat)": "Zainal Abidin",
         "Sudut Biru (Kontingen)": "Tapak Suci Bandung",
@@ -737,7 +733,6 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
         "Durasi Timer (Detik)": 120
       },
       {
-        "Nomor Urut": 2,
         "Nomor Partai": "02",
         "Sudut Biru (Nama Pesilat)": "Dewi Sartika",
         "Sudut Biru (Kontingen)": "Siliwangi Bogor",
@@ -750,7 +745,6 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
         "Durasi Timer (Detik)": 120
       },
       {
-        "Nomor Urut": 3,
         "Nomor Partai": "03",
         "Sudut Biru (Nama Pesilat)": "",
         "Sudut Biru (Kontingen)": "",
@@ -765,9 +759,9 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
     ];
 
     const ws = XLSX.utils.json_to_sheet(templateData);
+
     // Atur lebar kolom agar rapi
     ws["!cols"] = [
-      { wch: 15 }, // Nomor Urut
       { wch: 15 }, // Nomor Partai
       { wch: 30 }, // Sudut Biru (Nama Pesilat)
       { wch: 25 }, // Sudut Biru (Kontingen)
@@ -1813,16 +1807,9 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                             </td>
                             <td className="p-2 sm:p-3 min-w-0">
                               <div className="flex items-start gap-1.5 sm:gap-2.5 min-w-0">
-                                <div className="flex items-center gap-1 shrink-0 mt-0.5">
-                                  {p.nomor_urut !== undefined && p.nomor_urut !== null && (
-                                    <span className="bg-emerald-950 text-emerald-400 px-1.5 py-0.5 rounded font-mono font-black text-[9px] sm:text-[10px] border border-emerald-500/20 uppercase">
-                                      #{p.nomor_urut}
-                                    </span>
-                                  )}
-                                  <span className="bg-indigo-950 text-indigo-400 px-1.5 py-0.5 rounded font-mono font-black text-[9px] sm:text-[10px] border border-indigo-500/20 uppercase">
-                                    P-{p.nomor_partai || "01"}
-                                  </span>
-                                </div>
+                                <span className="bg-indigo-950 text-indigo-400 px-1.5 py-0.5 rounded font-mono font-black text-[9px] sm:text-[10px] border border-indigo-500/20 uppercase shrink-0 mt-0.5">
+                                  P-{p.nomor_partai || "01"}
+                                </span>
                                 <div className="space-y-1 min-w-0 flex-1">
                                   {/* Biru Corner */}
                                   {p.nama_pesilat_biru && (
