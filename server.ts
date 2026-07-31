@@ -5,6 +5,7 @@ import path from "path";
 import dotenv from "dotenv";
 import mysql from "mysql2/promise";
 import pg from "pg";
+import { DatabaseSync } from "node:sqlite";
 
 dotenv.config();
 
@@ -23,72 +24,142 @@ app.use((req, res, next) => {
 const PORT = process.env.PORT || 3000;
 
 const DB_URL = process.env.DATABASE_URL || (process.env.DB_HOST ? `mysql://${process.env.DB_USER || "root"}:${process.env.DB_PASS || ""}@${process.env.DB_HOST}/${process.env.DB_NAME || "test"}` : undefined);
-if (!DB_URL) {
-  console.error("DATABASE_URL is not set. Please set it to a valid PostgreSQL connection string in .env");
-}
 
 const isPostgres = DB_URL ? DB_URL.startsWith('postgres://') || DB_URL.startsWith('postgresql://') : false;
 
 let rawPool: mysql.Pool | null = null;
 let realPgPool: pg.Pool | null = null;
+let pgPool: any = null;
 
-if (DB_URL) {
-  if (isPostgres) {
-    realPgPool = new pg.Pool({ connectionString: DB_URL });
-  } else {
-    rawPool = mysql.createPool(DB_URL);
+function createSqlitePool() {
+  try {
+    const dbPath = path.join(process.cwd(), "local_data.sqlite");
+    const sqliteDb = new DatabaseSync(dbPath);
+    console.log("[DB] Using local SQLite database at:", dbPath);
+    return {
+      type: "sqlite",
+      query: async (text: string, params: any[] = []) => {
+        let sql = text.replace(/\$([0-9]+)/g, "?$1");
+        
+        // PostgreSQL to SQLite query adjustments
+        sql = sql.replace(/VARCHAR\(255\)/g, 'TEXT');
+        sql = sql.replace(/BIGINT/g, 'INTEGER');
+        sql = sql.replace(/BOOLEAN DEFAULT false/g, 'INTEGER DEFAULT 0');
+        sql = sql.replace(/BOOLEAN DEFAULT true/g, 'INTEGER DEFAULT 1');
+        sql = sql.replace(/BOOLEAN/g, 'INTEGER');
+        sql = sql.replace(/INSERT IGNORE INTO/g, 'INSERT OR IGNORE INTO');
+
+        const trimmed = sql.trim().toUpperCase();
+        const isSelect = trimmed.startsWith("SELECT") || sql.includes("RETURNING");
+
+        // Convert booleans to integers for sqlite
+        const safeParams = params.map(p => typeof p === 'boolean' ? (p ? 1 : 0) : p);
+
+        const stmt = sqliteDb.prepare(sql);
+        if (isSelect) {
+          const rows = stmt.all(...safeParams) as any[];
+          return { rows, rowCount: rows.length };
+        } else {
+          const result = stmt.run(...safeParams);
+          return { rows: [], rowCount: result.changes };
+        }
+      }
+    };
+  } catch (e: any) {
+    console.error("[DB] Failed to create SQLite pool:", e.message || e);
+    return {
+      type: "none",
+      query: async () => ({ rows: [], rowCount: 0 })
+    };
   }
 }
 
-const pgPool = realPgPool ? {
-  query: async (text: string, params: any[] = []) => {
-    return await realPgPool!.query(text, params);
-  }
-} : (rawPool ? {
-  query: async (text: string, params: any[] = []) => {
-    let newParams: any[] = [];
-    let hasParams = false;
-    let sql = text.replace(/\$([0-9]+)/g, (match, p1) => {
-      hasParams = true;
-      const index = parseInt(p1, 10) - 1;
-      newParams.push(params[index]);
-      return "?";
-    });
-    
-    let finalParams = hasParams ? newParams : params;
-    
-    // Postgres to MySQL specific fixes
-    sql = sql.replace(/VARCHAR\(255\)/g, 'VARCHAR(255)');
-    sql = sql.replace(/INSERT INTO/g, 'INSERT IGNORE INTO');
-    sql = sql.replace(/ON CONFLICT[\s\S]*?DO NOTHING/g, '');
-    sql = sql.replace(/CAST\(NULLIF\(regexp_replace\(nomor_partai, '\[\^0-9\]', '', 'g'\), ''\) AS INTEGER\)/g, "CAST(NULLIF(REGEXP_REPLACE(nomor_partai, '[^0-9]', ''), '') AS INTEGER)");
-    
-    const isUpdateReturning = sql.includes("RETURNING *");
-    if (isUpdateReturning) {
-       sql = sql.replace("RETURNING *", "");
+async function setupDatabaseConnection() {
+  if (DB_URL) {
+    let finalDbUrl = DB_URL;
+    if (finalDbUrl.includes('@localhost')) {
+      finalDbUrl = finalDbUrl.replace('@localhost', '@127.0.0.1');
+    } else if (finalDbUrl.includes('//localhost')) {
+      finalDbUrl = finalDbUrl.replace('//localhost', '//127.0.0.1');
     }
 
-    const [result] = await rawPool!.query(sql, finalParams);
-    
-    if (Array.isArray(result)) {
-      return { rows: result, rowCount: result.length };
-    } else {
-      const res = result as mysql.ResultSetHeader;
-      let rows: any[] = [];
-      if (isUpdateReturning && res.affectedRows > 0) {
-        const [selectResult] = await rawPool!.query("SELECT * FROM pesilat WHERE id = ?", [params[0]]);
-        rows = selectResult as any[];
+    try {
+      if (isPostgres) {
+        realPgPool = new pg.Pool({ connectionString: finalDbUrl, connectionTimeoutMillis: 3000 });
+        realPgPool.on('error', (err) => {
+          console.error('Unexpected error on idle PostgreSQL client', err.message);
+        });
+        const client = await Promise.race([
+          realPgPool.connect(),
+          new Promise<never>((_, reject) => setTimeout(() => reject(new Error("connect ETIMEDOUT")), 3000))
+        ]);
+        client.release();
+        
+        pgPool = {
+          type: "postgres",
+          query: async (text: string, params: any[] = []) => {
+            return await realPgPool!.query(text, params);
+          }
+        };
+        console.log("Connected to PostgreSQL Database successfully.");
+        return;
+      } else {
+        rawPool = mysql.createPool({ uri: finalDbUrl, connectTimeout: 3000 });
+        await Promise.race([
+          rawPool.query("SELECT 1"),
+          new Promise<never>((_, reject) => setTimeout(() => reject(new Error("connect ETIMEDOUT")), 3000))
+        ]);
+
+        pgPool = {
+          type: "mysql",
+          query: async (text: string, params: any[] = []) => {
+            let newParams: any[] = [];
+            let hasParams = false;
+            let sql = text.replace(/\$([0-9]+)/g, (match, p1) => {
+              hasParams = true;
+              const index = parseInt(p1, 10) - 1;
+              newParams.push(params[index]);
+              return "?";
+            });
+            
+            let finalParams = hasParams ? newParams : params;
+            
+            sql = sql.replace(/VARCHAR\(255\)/g, 'VARCHAR(255)');
+            sql = sql.replace(/INSERT INTO/g, 'INSERT IGNORE INTO');
+            sql = sql.replace(/ON CONFLICT[\s\S]*?DO NOTHING/g, '');
+            sql = sql.replace(/CAST\(NULLIF\(regexp_replace\(nomor_partai, '\[\^0-9\]', '', 'g'\), ''\) AS INTEGER\)/g, "CAST(NULLIF(REGEXP_REPLACE(nomor_partai, '[^0-9]', ''), '') AS INTEGER)");
+            
+            const isUpdateReturning = sql.includes("RETURNING *");
+            if (isUpdateReturning) {
+               sql = sql.replace("RETURNING *", "");
+            }
+
+            const [result] = await rawPool!.query(sql, finalParams);
+            
+            if (Array.isArray(result)) {
+              return { rows: result, rowCount: result.length };
+            } else {
+              const res = result as mysql.ResultSetHeader;
+              let rows: any[] = [];
+              if (isUpdateReturning && res.affectedRows > 0) {
+                const [selectResult] = await rawPool!.query("SELECT * FROM pesilat WHERE id = ?", [params[0]]);
+                rows = selectResult as any[];
+              }
+              return { rows: rows, rowCount: res.affectedRows };
+            }
+          }
+        };
+        console.log("Connected to MySQL Database successfully.");
+        return;
       }
-      return { rows: rows, rowCount: res.affectedRows };
+    } catch (err: any) {
+      console.warn(`[DB Connection Warning] Could not connect to remote DB (${err.message || err}). Falling back to local SQLite database.`);
     }
+  } else {
+    console.log("No DATABASE_URL set. Initializing local SQLite database.");
   }
-} : null);
 
-
-if (pgPool) {
-  console.log(isPostgres ? "Using PostgreSQL Database" : "Using MySQL Database with PG Wrapper");
-} else {
-  console.log("Waiting for DATABASE_URL...");
+  pgPool = createSqlitePool();
 }
 
 async function initDb() {
@@ -99,12 +170,14 @@ async function initDb() {
     )`);
   try {
     await pgPool.query(`ALTER TABLE pengaturan_arena ADD COLUMN judul_aplikasi VARCHAR(255) DEFAULT 'SISTEM BOARDING PENCAK SILAT'`);
+  } catch(e) {}
+  try {
     await pgPool.query(`ALTER TABLE pengaturan_arena ADD COLUMN auto_next BOOLEAN DEFAULT true`);
-  } catch(e) {
-    // ignore duplicate column
-  }
+  } catch(e) {}
+
   await pgPool.query(`CREATE TABLE IF NOT EXISTS pesilat (
       id VARCHAR(255) PRIMARY KEY,
+      nomor_urut INTEGER DEFAULT 0,
       nomor_partai VARCHAR(255),
       nama_pesilat VARCHAR(255),
       kontingen VARCHAR(255),
@@ -121,6 +194,9 @@ async function initDb() {
       timer_last_updated_at BIGINT,
       is_done BOOLEAN DEFAULT false
     )`);
+  try {
+    await pgPool.query(`ALTER TABLE pesilat ADD COLUMN nomor_urut INTEGER DEFAULT 0`);
+  } catch(e) {}
   await pgPool.query(`CREATE TABLE IF NOT EXISTS admin_users (
       id VARCHAR(255) PRIMARY KEY,
       username VARCHAR(255) UNIQUE,
@@ -133,12 +209,21 @@ async function initDb() {
       password VARCHAR(255),
       token VARCHAR(255)
     )`);
-  await pgPool.query(`INSERT INTO pengaturan_arena (id, jumlah_arena) VALUES ('00000000-0000-0000-0000-000000000001', 3) ON CONFLICT (id) DO NOTHING;`);
+  
+  if (pgPool.type === "sqlite") {
+    await pgPool.query(`INSERT OR IGNORE INTO pengaturan_arena (id, jumlah_arena) VALUES ('00000000-0000-0000-0000-000000000001', 3);`);
+  } else {
+    await pgPool.query(`INSERT INTO pengaturan_arena (id, jumlah_arena) VALUES ('00000000-0000-0000-0000-000000000001', 3) ON CONFLICT (id) DO NOTHING;`);
+  }
   
   // Seed default admin user
   const adminCheck = await pgPool.query(`SELECT * FROM admin_users WHERE username = 'operatorDB'`);
   if (adminCheck.rows.length === 0) {
-    await pgPool.query(`INSERT INTO admin_users (id, username, password) VALUES ('1', 'operatorDB', 'silat2026') ON CONFLICT (username) DO NOTHING;`);
+    if (pgPool.type === "sqlite") {
+      await pgPool.query(`INSERT OR IGNORE INTO admin_users (id, username, password) VALUES ('1', 'operatorDB', 'silat2026');`);
+    } else {
+      await pgPool.query(`INSERT INTO admin_users (id, username, password) VALUES ('1', 'operatorDB', 'silat2026') ON CONFLICT (username) DO NOTHING;`);
+    }
   }
 }
 
@@ -189,9 +274,14 @@ async function getPesilats() {
     if (a.arena !== b.arena) {
       return (Number(a.arena) || 0) - (Number(b.arena) || 0);
     }
-    const numA = parseInt((a.nomor_partai || "").toString().replace(/[^0-9]/g, ''), 10) || 0;
-    const numB = parseInt((b.nomor_partai || "").toString().replace(/[^0-9]/g, ''), 10) || 0;
-    return numA - numB;
+    const numA = Number(a.nomor_urut) || 0;
+    const numB = Number(b.nomor_urut) || 0;
+    if (numA !== numB) return numA - numB;
+    
+    // Fallback to nomor_partai
+    const pA = parseInt((a.nomor_partai || "").toString().replace(/[^0-9]/g, ''), 10) || 0;
+    const pB = parseInt((b.nomor_partai || "").toString().replace(/[^0-9]/g, ''), 10) || 0;
+    return pA - pB;
   });
 }
 
@@ -464,13 +554,16 @@ app.put("/api/pesilat/:id/timeout", async (req, res) => {
 
     const all = await getPesilats();
     const arenaMatches = all.filter(match => Number(match.arena) === Number(p.arena)).sort((a, b) => {
-      const numA = parseFloat(a.nomor_partai);
-      const numB = parseFloat(b.nomor_partai);
-      const isNumA = !isNaN(numA) && isFinite(numA);
-      const isNumB = !isNaN(numB) && isFinite(numB);
-      if (isNumA && isNumB) return numA - numB;
-      if (isNumA) return -1;
-      if (isNumB) return 1;
+      const numA = Number(a.nomor_urut) || 0;
+      const numB = Number(b.nomor_urut) || 0;
+      if (numA !== numB) return numA - numB;
+      const pA = parseFloat(a.nomor_partai);
+      const pB = parseFloat(b.nomor_partai);
+      const isPA = !isNaN(pA) && isFinite(pA);
+      const isPB = !isNaN(pB) && isFinite(pB);
+      if (isPA && isPB) return pA - pB;
+      if (isPA) return -1;
+      if (isPB) return 1;
       return String(a.nomor_partai || "").localeCompare(String(b.nomor_partai || ""), undefined, { numeric: true, sensitivity: "base" });
     });
     const currentIndex = arenaMatches.findIndex(match => match.id === id);
@@ -586,10 +679,11 @@ app.delete("/api/announce/:id", (req, res) => {
 });
 
 async function startServer() {
+  await setupDatabaseConnection();
   try {
     await initDb();
-  } catch (err) {
-    console.error("Failed to initialize database:", err);
+  } catch (err: any) {
+    console.error("Database init error:", err.message || err);
   }
   
   
@@ -660,13 +754,16 @@ app.post("/api/arena/:arena/next", async (req, res) => {
     const arenaNum = parseInt(req.params.arena, 10);
     const all = await getPesilats();
     const arenaMatches = all.filter(match => Number(match.arena) === arenaNum).sort((a, b) => {
-      const numA = parseFloat(a.nomor_partai);
-      const numB = parseFloat(b.nomor_partai);
-      const isNumA = !isNaN(numA) && isFinite(numA);
-      const isNumB = !isNaN(numB) && isFinite(numB);
-      if (isNumA && isNumB) return numA - numB;
-      if (isNumA) return -1;
-      if (isNumB) return 1;
+      const numA = Number(a.nomor_urut) || 0;
+      const numB = Number(b.nomor_urut) || 0;
+      if (numA !== numB) return numA - numB;
+      const pA = parseFloat(a.nomor_partai);
+      const pB = parseFloat(b.nomor_partai);
+      const isPA = !isNaN(pA) && isFinite(pA);
+      const isPB = !isNaN(pB) && isFinite(pB);
+      if (isPA && isPB) return pA - pB;
+      if (isPA) return -1;
+      if (isPB) return 1;
       return String(a.nomor_partai || "").localeCompare(String(b.nomor_partai || ""), undefined, { numeric: true, sensitivity: "base" });
     });
     
@@ -703,13 +800,16 @@ app.post("/api/arena/:arena/undo", async (req, res) => {
     const arenaNum = parseInt(req.params.arena, 10);
     const all = await getPesilats();
     const arenaMatches = all.filter(match => Number(match.arena) === arenaNum).sort((a, b) => {
-      const numA = parseFloat(a.nomor_partai);
-      const numB = parseFloat(b.nomor_partai);
-      const isNumA = !isNaN(numA) && isFinite(numA);
-      const isNumB = !isNaN(numB) && isFinite(numB);
-      if (isNumA && isNumB) return numB - numA; // Sort descending to find the last done match
-      if (isNumA) return -1;
-      if (isNumB) return 1;
+      const numA = Number(a.nomor_urut) || 0;
+      const numB = Number(b.nomor_urut) || 0;
+      if (numA !== numB) return numB - numA; // Sort descending
+      const pA = parseFloat(a.nomor_partai);
+      const pB = parseFloat(b.nomor_partai);
+      const isPA = !isNaN(pA) && isFinite(pA);
+      const isPB = !isNaN(pB) && isFinite(pB);
+      if (isPA && isPB) return pB - pA; // Sort descending to find the last done match
+      if (isPA) return -1;
+      if (isPB) return 1;
       return String(b.nomor_partai || "").localeCompare(String(a.nomor_partai || ""), undefined, { numeric: true, sensitivity: "base" });
     });
     

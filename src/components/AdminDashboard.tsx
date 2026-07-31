@@ -59,6 +59,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
   
   // Form States - Pesilat
   const [pesilatId, setPesilatId] = useState<string>(""); // Hanya untuk edit
+  const [nomorUrut, setNomorUrut] = useState<number>(1);
   const [nomorPartai, setNomorPartai] = useState<string>("01");
   const [namaPesilat, setNamaPesilat] = useState<string>(""); // Sudut Merah
   const [kontingen, setKontingen] = useState<string>("");     // Sudut Merah
@@ -592,7 +593,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
 
         // Map header excel ke model Pesilat
         // Kita dukung nama kolom bahasa Indonesia/Inggris
-        const mappedItems = rawData.map((row: any) => {
+        const mappedItems = rawData.map((row: any, index: number) => {
           // Cari property dengan membandingkan lowercase & hanya menyisakan karakter alfanumerik (menghilangkan spasi, tanda kurung, dsb.)
           const getVal = (keys: string[]) => {
             const foundKey = Object.keys(row).find(k => 
@@ -608,7 +609,8 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
           };
 
           const arenaVal = Number(getVal(["arena", "gelanggang"])) || 1;
-          const nomorPartai = getValStr(["nomorpartai", "partai", "nopartai", "no", "number", "nomor_partai"], "01");
+          const nomorUrut = Number(getVal(["nourut", "no_urut", "nomor_urut", "nour", "urut", "no"])) || (index + 1);
+          const nomorPartai = getValStr(["nomorpartai", "partai", "nopartai", "number", "nomor_partai"], "01");
           const namaMerah = getValStr(["sudutmerahnamapesilat", "nama_pesilat", "namapesilat", "pesilat", "nama_merah", "merah_nama", "sudut_merah", "pesilat_merah", "sudutmerahnama"]);
           const kontingenMerah = getValStr(["sudutmerahkontingen", "kontingen", "kontingen_merah", "sudut_merah_kontingen", "merah_kontingen", "kontingen_merah", "sudutmerahkontingen"]);
           const namaBiru = getValStr(["sudutbirunamapesilat", "nama_pesilat_biru", "namapesilatbiru", "pesilat_biru", "nama_biru", "biru_nama", "sudut_biru", "pesilat_biru", "sudutbirunama"]);
@@ -620,6 +622,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
 
           return {
             arena: arenaVal,
+            nomor_urut: nomorUrut,
             nomor_partai: nomorPartai,
             nama_pesilat: namaMerah,
             kontingen: kontingenMerah,
@@ -673,6 +676,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
     // 1. Buat data dummy sebagai contoh pengisian
     const templateData = [
       {
+        "No. urut": 1,
         "Nomor Partai": "01",
         "Sudut Biru (Nama Pesilat)": "Zainal Abidin",
         "Sudut Biru (Kontingen)": "Tapak Suci Bandung",
@@ -685,6 +689,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
         "Durasi Timer (Detik)": 120
       },
       {
+        "No. urut": 2,
         "Nomor Partai": "02",
         "Sudut Biru (Nama Pesilat)": "Dewi Sartika",
         "Sudut Biru (Kontingen)": "Siliwangi Bogor",
@@ -738,6 +743,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
     }
 
     const exportData = pesilatList.map(p => ({
+      "No. urut": p.nomor_urut || 0,
       "Nomor Partai": p.nomor_partai || "00",
       "Sudut Biru (Nama Pesilat)": p.nama_pesilat_biru || "",
       "Sudut Biru (Kontingen)": p.kontingen_biru || "",
@@ -855,6 +861,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
     }
 
     const payload = {
+      nomor_urut: nomorUrut,
       nomor_partai: nomorPartai,
       nama_pesilat: namaPesilat,
       kontingen,
@@ -906,6 +913,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
     setIsEditMode(true);
     setIsModalOpen(true);
     setPesilatId(p.id);
+    setNomorUrut(p.nomor_urut || 1);
     setNomorPartai(p.nomor_partai || "");
     setNamaPesilat(p.nama_pesilat || "");
     setKontingen(p.kontingen || "");
@@ -993,6 +1001,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
     setIsEditMode(false);
     setIsModalOpen(false);
     setPesilatId("");
+    setNomorUrut(pesilatList.length > 0 ? Math.max(...pesilatList.map(p => p.nomor_urut || 0)) + 1 : 1);
     setNomorPartai("01");
     setNamaPesilat("");
     setKontingen("");
@@ -1158,18 +1167,33 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                   </div>
 
                   <form onSubmit={handleSubmitPesilat} className="space-y-4 text-xs sm:text-sm">
-                    <div>
-                      <label className="block text-[10px] font-bold text-indigo-400 mb-1.5 uppercase tracking-widest font-mono">
-                        Nomor Partai / Pertandingan
-                      </label>
-                      <input
-                        type="text"
-                        value={nomorPartai}
-                        onChange={(e) => setNomorPartai(e.target.value)}
-                        placeholder="Contoh: 01, A-12, dll."
-                        className="w-full bg-slate-950 border border-slate-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-white rounded-xl px-3 py-2.5 outline-none transition font-bold"
-                        required
-                      />
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-[10px] font-bold text-indigo-400 mb-1.5 uppercase tracking-widest font-mono">
+                          Nomor Urut
+                        </label>
+                        <input
+                          type="number"
+                          value={nomorUrut}
+                          onChange={(e) => setNomorUrut(Number(e.target.value))}
+                          placeholder="Contoh: 1"
+                          className="w-full bg-slate-950 border border-slate-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-white rounded-xl px-3 py-2.5 outline-none transition font-bold"
+                          required
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-bold text-indigo-400 mb-1.5 uppercase tracking-widest font-mono">
+                          Nomor Partai
+                        </label>
+                        <input
+                          type="text"
+                          value={nomorPartai}
+                          onChange={(e) => setNomorPartai(e.target.value)}
+                          placeholder="Contoh: 01, A-12, dll."
+                          className="w-full bg-slate-950 border border-slate-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-white rounded-xl px-3 py-2.5 outline-none transition font-bold"
+                          required
+                        />
+                      </div>
                     </div>
 
                     {/* SUDUT BIRU GROUP */}
@@ -1773,9 +1797,14 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                             </td>
                             <td className="p-2 sm:p-3 min-w-0">
                               <div className="flex items-start gap-1.5 sm:gap-2.5 min-w-0">
-                                <span className="bg-indigo-950 text-indigo-400 px-1.5 py-0.5 rounded font-mono font-black text-[9px] sm:text-[10px] border border-indigo-500/20 uppercase shrink-0 mt-0.5">
-                                  P-{p.nomor_partai || "01"}
-                                </span>
+                                <div className="flex flex-col gap-1 shrink-0 mt-0.5">
+                                  <span className="bg-indigo-950 text-indigo-400 px-1.5 py-0.5 rounded font-mono font-black text-[9px] sm:text-[10px] border border-indigo-500/20 uppercase shrink-0">
+                                    U-{p.nomor_urut || "1"}
+                                  </span>
+                                  <span className="bg-slate-800 text-slate-300 px-1.5 py-0.5 rounded font-mono font-black text-[9px] sm:text-[10px] border border-slate-700 uppercase shrink-0">
+                                    P-{p.nomor_partai || "01"}
+                                  </span>
+                                </div>
                                 <div className="space-y-1 min-w-0 flex-1">
                                   {/* Biru Corner */}
                                   {p.nama_pesilat_biru && (

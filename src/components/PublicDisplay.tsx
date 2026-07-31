@@ -814,16 +814,17 @@ export default function PublicDisplay() {
               const waitingQueue = pesilatInArena
                 .filter(p => !p.is_playing && !p.is_done)
                 .sort((a, b) => {
-                  const numA = parseFloat(a.nomor_partai);
-                  const numB = parseFloat(b.nomor_partai);
-                  const isNumA = !isNaN(numA) && isFinite(numA);
-                  const isNumB = !isNaN(numB) && isFinite(numB);
-                  if (isNumA && isNumB) {
-                    return numA - numB;
-                  }
-                  if (isNumA) return -1;
-                  if (isNumB) return 1;
-                  return a.nomor_partai.localeCompare(b.nomor_partai, undefined, { numeric: true, sensitivity: "base" });
+                  const numA = Number(a.nomor_urut) || 0;
+                  const numB = Number(b.nomor_urut) || 0;
+                  if (numA !== numB) return numA - numB;
+                  const pA = parseFloat(a.nomor_partai);
+                  const pB = parseFloat(b.nomor_partai);
+                  const isPA = !isNaN(pA) && isFinite(pA);
+                  const isPB = !isNaN(pB) && isFinite(pB);
+                  if (isPA && isPB) return pA - pB;
+                  if (isPA) return -1;
+                  if (isPB) return 1;
+                  return String(a.nomor_partai || "").localeCompare(String(b.nomor_partai || ""), undefined, { numeric: true, sensitivity: "base" });
                 });
 
               const colors = ["bg-gradient-to-r from-yellow-400 via-amber-500 to-red-600", "bg-gradient-to-r from-amber-500 via-red-500 to-red-700", "bg-gradient-to-l from-yellow-400 via-amber-500 to-red-600"];
