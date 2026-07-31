@@ -38,9 +38,9 @@ jobs:
         with:
           # Anda harus mengatur repository secrets di GitHub:
           # Settings -> Secrets and variables -> Actions -> New repository secret
-          server: ${{ secrets.CPANEL_FTP_SERVER }}
-          username: ${{ secrets.CPANEL_FTP_USERNAME }}
-          password: ${{ secrets.CPANEL_FTP_PASSWORD }}
+          server: ${{ secrets.FTP_SERVER }}
+          username: ${{ secrets.FTP_USERNAME }}
+          password: ${{ secrets.FTP_PASSWORD }}
           local-dir: ./deploy_folder/
           # PERHATIAN: Sesuaikan server-dir dengan path folder aplikasi Node.js di cPanel Anda
           # Contoh: /silat-app/ (Jika aplikasi Anda berada di folder silat-app pada root FTP)
