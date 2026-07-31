@@ -11,7 +11,7 @@ def zipdir(path, ziph):
 # Ensure deploy_folder has latest
 os.system('rm -rf deploy_folder')
 os.system('mkdir deploy_folder')
-os.system('cp -r dist deploy_folder/dist')
+os.system('cp -r dist/* deploy_folder/')
 os.system('cp package_cpanel.json deploy_folder/package.json')
 os.system('cp app_cpanel.js deploy_folder/app.js')
 os.system('cp schema.sql deploy_folder/schema.sql')

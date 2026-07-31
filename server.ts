@@ -673,16 +673,6 @@ app.delete("/api/announce/:id", (req, res) => {
   res.json({ success: true });
 });
 
-async function startServer() {
-  await setupDatabaseConnection();
-  try {
-    await initDb();
-  } catch (err: any) {
-    console.error("Database init error:", err.message || err);
-  }
-  
-  
-
 app.get("/api/download-source", (req, res) => {
   const filePath = path.join(process.cwd(), 'public', 'source_code.zip');
   if (fs.existsSync(filePath)) {
@@ -692,7 +682,7 @@ app.get("/api/download-source", (req, res) => {
   }
 });
 
-  app.get("/api/download-zip", (req, res) => {
+app.get("/api/download-zip", (req, res) => {
   const filePath = path.join(process.cwd(), 'public', 'deploy_cpanel.zip');
   if (fs.existsSync(filePath)) {
     res.download(filePath, 'deploy_cpanel.zip');
@@ -700,49 +690,6 @@ app.get("/api/download-source", (req, res) => {
     res.status(404).send('File not found');
   }
 });
-
-  const isProd = process.env.NODE_ENV === "production" || !fs.existsSync(path.join(process.cwd(), "vite.config.ts"));
-  if (!isProd) {
-    const { createServer: createViteServer } = await import("vite");
-    const vite = await createViteServer({ server: { middlewareMode: true }, appType: "spa" });
-    app.use(vite.middlewares);
-  } else {
-    const distPath = typeof __dirname !== "undefined" ? __dirname : path.join(process.cwd(), "dist");
-    
-    // Fallback static paths for robust cPanel deployment
-    const rootPath = process.cwd();
-    app.use(express.static(distPath));
-    app.use('/assets', express.static(path.join(distPath, 'assets')));
-    app.use('/assets', express.static(path.join(rootPath, 'assets')));
-    app.use('/assets', express.static(path.join(rootPath, 'dist', 'assets')));
-    
-    app.get("/api/debug-paths", (req, res) => {
-      
-      res.json({
-        __dirname: typeof __dirname !== "undefined" ? __dirname : "undefined",
-        cwd: process.cwd(),
-        distPath,
-        filesInDist: fs.existsSync(distPath) ? fs.readdirSync(distPath) : null,
-        filesInAssets: fs.existsSync(path.join(distPath, 'assets')) ? fs.readdirSync(path.join(distPath, 'assets')) : null,
-        filesInRootAssets: fs.existsSync(path.join(rootPath, 'assets')) ? fs.readdirSync(path.join(rootPath, 'assets')) : null
-      });
-    });
-
-    app.get("*", (req, res) => {
-      const p1 = path.join(distPath, "index.html");
-      const p2 = path.join(distPath, "dist", "index.html");
-      const p3 = path.join(process.cwd(), "dist", "index.html");
-      const p4 = path.join(process.cwd(), "index.html");
-      if (fs.existsSync(p1)) return res.sendFile(p1);
-      if (fs.existsSync(p2)) return res.sendFile(p2);
-      if (fs.existsSync(p3)) return res.sendFile(p3);
-      if (fs.existsSync(p4)) return res.sendFile(p4);
-      res.status(404).send("index.html not found");
-    });
-  }
-
-}
-
 
 app.post("/api/arena/:arena/next", async (req, res) => {
   try {
@@ -820,8 +767,57 @@ app.post("/api/arena/:arena/undo", async (req, res) => {
   } catch (error: any) { res.status(200).json({ error: error.message, is_500: true }); }
 });
 
-app.listen(PORT as number, "0.0.0.0", () => {
-  console.log(`Server running at http://0.0.0.0:${PORT}`);
-});
+async function startServer() {
+  await setupDatabaseConnection();
+  try {
+    await initDb();
+  } catch (err: any) {
+    console.error("Database init error:", err.message || err);
+  }
+
+  const isProd = process.env.NODE_ENV === "production" || !fs.existsSync(path.join(process.cwd(), "vite.config.ts"));
+  if (!isProd) {
+    const { createServer: createViteServer } = await import("vite");
+    const vite = await createViteServer({ server: { middlewareMode: true }, appType: "spa" });
+    app.use(vite.middlewares);
+  } else {
+    const distPath = typeof __dirname !== "undefined" ? __dirname : path.join(process.cwd(), "dist");
+    
+    // Fallback static paths for robust cPanel deployment
+    const rootPath = process.cwd();
+    app.use(express.static(distPath));
+    app.use(express.static(rootPath));
+    app.use('/assets', express.static(path.join(distPath, 'assets')));
+    app.use('/assets', express.static(path.join(rootPath, 'assets')));
+    app.use('/assets', express.static(path.join(rootPath, 'dist', 'assets')));
+    
+    app.get("/api/debug-paths", (req, res) => {
+      res.json({
+        __dirname: typeof __dirname !== "undefined" ? __dirname : "undefined",
+        cwd: process.cwd(),
+        distPath,
+        filesInDist: fs.existsSync(distPath) ? fs.readdirSync(distPath) : null,
+        filesInAssets: fs.existsSync(path.join(distPath, 'assets')) ? fs.readdirSync(path.join(distPath, 'assets')) : null,
+        filesInRootAssets: fs.existsSync(path.join(rootPath, 'assets')) ? fs.readdirSync(path.join(rootPath, 'assets')) : null
+      });
+    });
+
+    app.get("*", (req, res) => {
+      const p1 = path.join(distPath, "index.html");
+      const p2 = path.join(distPath, "dist", "index.html");
+      const p3 = path.join(process.cwd(), "dist", "index.html");
+      const p4 = path.join(process.cwd(), "index.html");
+      if (fs.existsSync(p1)) return res.sendFile(p1);
+      if (fs.existsSync(p2)) return res.sendFile(p2);
+      if (fs.existsSync(p3)) return res.sendFile(p3);
+      if (fs.existsSync(p4)) return res.sendFile(p4);
+      res.status(404).send("index.html not found");
+    });
+  }
+
+  app.listen(PORT as number, "0.0.0.0", () => {
+    console.log(`Server running at http://0.0.0.0:${PORT}`);
+  });
+}
 
 startServer();

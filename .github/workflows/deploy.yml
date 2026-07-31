@@ -3,7 +3,8 @@ name: Deploy to cPanel via FTP
 on:
   push:
     branches:
-      - main # Ubah ke 'master' jika branch utama bernama master
+      - main
+      - master
 
 jobs:
   build-and-deploy:
@@ -55,7 +56,7 @@ jobs:
         password: ${{ secrets.FTP_PASSWORD }}
         server-dir: domains/boardingsilat.mra.my.id/public_html/
         local-dir: ./deploy_folder/
-        dangerous-clean-slate: true
+        dangerous-clean-slate: false
         exclude: |
           **/.htaccess
           .htaccess
@@ -66,3 +67,4 @@ jobs:
           .cagefs
           .npm
           .php
+
