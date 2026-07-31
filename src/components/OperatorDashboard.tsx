@@ -89,7 +89,7 @@ export default function OperatorDashboard({ onLogout, username }: { onLogout: ()
       await fetch("/api/pengaturan_arena", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ auto_next: newVal })
+        body: JSON.stringify({ jumlah_arena: jumlahArena, auto_next: newVal })
       });
       if (!newVal) {
         await fetch("/api/pesilat/timer-all", {
@@ -222,7 +222,7 @@ export default function OperatorDashboard({ onLogout, username }: { onLogout: ()
         <div className="space-y-4">
           {Array.from({ length: jumlahArena }, (_, idx) => {
             const arenaNum = idx + 1;
-            const activePesilat = pesilatList.find(p => (parseInt(String(p.arena).replace(/\D/g, ''), 10) === arenaNum || String(p.arena) === String(arenaNum)) && p.is_playing);
+            const activePesilat = pesilatList.find(p => p.arena === arenaNum && p.is_playing);
 
             return (
               <div key={arenaNum} className={`rounded-2xl p-4 border-2 transition shadow-xl ${

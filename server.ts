@@ -20,7 +20,7 @@ app.use((req, res, next) => {
   next();
 });
 
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
 
 const DB_URL = process.env.DATABASE_URL || (process.env.DB_HOST ? `mysql://${process.env.DB_USER || "root"}:${process.env.DB_PASS || ""}@${process.env.DB_HOST}/${process.env.DB_NAME || "test"}` : undefined);
 if (!DB_URL) {
@@ -28,17 +28,15 @@ if (!DB_URL) {
 }
 
 const isPostgres = DB_URL ? DB_URL.startsWith('postgres://') || DB_URL.startsWith('postgresql://') : false;
-const isMysql = DB_URL ? DB_URL.startsWith('mysql://') : false;
+
 let rawPool: mysql.Pool | null = null;
 let realPgPool: pg.Pool | null = null;
 
 if (DB_URL) {
   if (isPostgres) {
     realPgPool = new pg.Pool({ connectionString: DB_URL });
-  } else if (isMysql) {
-    rawPool = mysql.createPool(DB_URL);
   } else {
-    console.error("DATABASE_URL is not a valid postgres:// or mysql:// connection string.");
+    rawPool = mysql.createPool(DB_URL);
   }
 }
 
@@ -102,11 +100,6 @@ async function initDb() {
   try {
     await pgPool.query(`ALTER TABLE pengaturan_arena ADD COLUMN judul_aplikasi VARCHAR(255) DEFAULT 'SISTEM BOARDING PENCAK SILAT'`);
     await pgPool.query(`ALTER TABLE pengaturan_arena ADD COLUMN auto_next BOOLEAN DEFAULT true`);
-    try {
-      await pgPool.query(`ALTER TABLE pesilat ALTER COLUMN arena TYPE TEXT USING arena::TEXT`);
-    } catch(e) {
-      // Ignored if already text or column doesn't exist yet
-    }
   } catch(e) {
     // ignore duplicate column
   }
@@ -120,7 +113,7 @@ async function initDb() {
       kelas VARCHAR(255),
       kategori VARCHAR(255),
       gender VARCHAR(255),
-      arena TEXT,
+      arena INTEGER,
       is_playing BOOLEAN DEFAULT false,
       timer_duration INTEGER,
       timer_seconds_left INTEGER,
@@ -387,25 +380,10 @@ app.post("/api/pesilat", async (req, res) => {
 app.post("/api/pesilat/batch", async (req, res) => {
   try {
     const { items } = req.body;
-    const existingPesilats = await getPesilats();
-    let insertedCount = 0;
-    
     for (const item of items) {
-      // Pengecekan krusial: Nomor Partai, Sudut Biru, Sudut Merah, Kelas, Arena
-      const isDuplicate = existingPesilats.some(ep => 
-        String(ep.nomor_partai).trim().toLowerCase() === String(item.nomor_partai).trim().toLowerCase() &&
-        String(ep.nama_pesilat).trim().toLowerCase() === String(item.nama_pesilat).trim().toLowerCase() &&
-        String(ep.nama_pesilat_biru).trim().toLowerCase() === String(item.nama_pesilat_biru).trim().toLowerCase() &&
-        String(ep.kelas).trim().toLowerCase() === String(item.kelas).trim().toLowerCase() &&
-        String(ep.arena).trim().toLowerCase() === String(item.arena).trim().toLowerCase()
-      );
-      
-      if (!isDuplicate) {
-        await insertPesilat({ ...item, id: item.id || Date.now().toString() + Math.random().toString(), timer_last_updated_at: Date.now() });
-        insertedCount++;
-      }
+      await insertPesilat({ ...item, id: item.id || Date.now().toString() + Math.random().toString(), timer_last_updated_at: Date.now() });
     }
-    res.json({ success: true, count: insertedCount, skipped: items.length - insertedCount });
+    res.json(await getPesilats());
   } catch (error: any) { res.status(200).json({ error: error.message, is_500: true }); }
 });
 
@@ -493,7 +471,7 @@ app.put("/api/pesilat/:id/timeout", async (req, res) => {
     const p = mapPesilat(updateRes.rows[0]);
 
     const all = await getPesilats();
-    const arenaMatches = all.filter(match => (parseInt(String(match.arena).replace(/\D/g, ''), 10) || match.arena) === (parseInt(String(p.arena).replace(/\D/g, ''), 10) || p.arena)).sort((a, b) => {
+    const arenaMatches = all.filter(match => Number(match.arena) === Number(p.arena)).sort((a, b) => {
       const numA = parseFloat(a.nomor_partai);
       const numB = parseFloat(b.nomor_partai);
       const isNumA = !isNaN(numA) && isFinite(numA);
@@ -568,12 +546,8 @@ app.get("/api/pengaturan_arena", async (req, res) => {
 
 app.put("/api/pengaturan_arena", async (req, res) => {
   try {
-    const currentConfig = await getPengaturanArena();
-    const autoNext = req.body.auto_next !== undefined ? req.body.auto_next : currentConfig.auto_next;
-    const jumlahArena = req.body.jumlah_arena !== undefined ? req.body.jumlah_arena : currentConfig.jumlah_arena;
-    const judulAplikasi = req.body.judul_aplikasi !== undefined ? req.body.judul_aplikasi : currentConfig.judul_aplikasi;
-    
-    await setPengaturanArena(jumlahArena, judulAplikasi, autoNext);
+    const autoNext = req.body.auto_next !== undefined ? req.body.auto_next : true;
+    await setPengaturanArena(req.body.jumlah_arena || 3, req.body.judul_aplikasi || 'SISTEM BOARDING PENCAK SILAT', autoNext);
     const config = await getPengaturanArena();
     res.json({ id: "00000000-0000-0000-0000-000000000001", ...config });
   } catch (error: any) { res.status(200).json({ error: error.message, is_500: true }); }
@@ -693,7 +667,7 @@ app.post("/api/arena/:arena/next", async (req, res) => {
   try {
     const arenaNum = parseInt(req.params.arena, 10);
     const all = await getPesilats();
-    const arenaMatches = all.filter(match => (parseInt(String(match.arena).replace(/\D/g, ''), 10) === arenaNum || String(match.arena) === String(arenaNum))).sort((a, b) => {
+    const arenaMatches = all.filter(match => Number(match.arena) === arenaNum).sort((a, b) => {
       const numA = parseFloat(a.nomor_partai);
       const numB = parseFloat(b.nomor_partai);
       const isNumA = !isNaN(numA) && isFinite(numA);
@@ -736,7 +710,7 @@ app.post("/api/arena/:arena/undo", async (req, res) => {
   try {
     const arenaNum = parseInt(req.params.arena, 10);
     const all = await getPesilats();
-    const arenaMatches = all.filter(match => (parseInt(String(match.arena).replace(/\D/g, ''), 10) === arenaNum || String(match.arena) === String(arenaNum))).sort((a, b) => {
+    const arenaMatches = all.filter(match => Number(match.arena) === arenaNum).sort((a, b) => {
       const numA = parseFloat(a.nomor_partai);
       const numB = parseFloat(b.nomor_partai);
       const isNumA = !isNaN(numA) && isFinite(numA);
