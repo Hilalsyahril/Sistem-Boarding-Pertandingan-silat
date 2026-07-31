@@ -6,10 +6,6 @@ import { Pesilat, ConfigStatus } from "../types";
 
 export default function PublicDisplay() {
   const [pesilatList, setPesilatList] = useState<Pesilat[]>([]);
-  const pesilatListRef = useRef<Pesilat[]>([]);
-  useEffect(() => {
-    pesilatListRef.current = pesilatList;
-  }, [pesilatList]);
   const [jumlahArena, setJumlahArena] = useState<number>(3);
   const [judulAplikasi, setJudulAplikasi] = useState<string>("SISTEM BOARDING PENCAK SILAT");
   const [autoNextMatch, setAutoNextMatch] = useState<boolean>(true);
@@ -89,21 +85,11 @@ export default function PublicDisplay() {
       isSpeakingRef.current = false;
       return;
     }
-
-    // Hanya pertahankan antrean untuk pesilat yang SAAT INI sedang bermain (menghindari penumpukan dan ketidaksesuaian tampilan)
-    const currentPesilats = pesilatListRef.current;
-    speechQueueRef.current = speechQueueRef.current.filter(item => {
-      const p = currentPesilats.find(p => p.id === item.pesilatId);
-      return p && p.is_playing;
-    });
-
-    if (speechQueueRef.current.length === 0) {
-      isSpeakingRef.current = false;
-      return;
-    }
+    if (speechQueueRef.current.length === 0) return;
 
     if (isSpeakingRef.current) return;
     isSpeakingRef.current = true;
+
     const current = speechQueueRef.current[0];
     let isDone = false;
     let safetyTimeout: any;
@@ -323,8 +309,8 @@ export default function PublicDisplay() {
         }
         if (Array.isArray(data) && data.length > 0) {
           for (const ann of data) {
-            // check if already queued to avoid double (mencegah penumpukan pesilatId yang sama di antrean)
-            if (!speechQueueRef.current.some(item => item.annId === ann.id || item.pesilatId === ann.pesilatId)) {
+            // check if already queued to avoid double
+            if (!speechQueueRef.current.some(item => item.annId === ann.id)) {
               speechQueueRef.current.push({ text: ann.text, arenaNum: ann.arenaNum, pesilatId: ann.pesilatId, annId: ann.id });
               processQueue();
             }
