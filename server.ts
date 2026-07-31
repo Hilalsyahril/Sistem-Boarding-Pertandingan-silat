@@ -287,7 +287,7 @@ app.post("/api/admin/change-password", async (req, res) => {
 app.get("/api/admin/operators", async (req, res) => {
   try {
     if (!pgPool) return res.status(200).json({ error: "Database not connected", is_500: true });
-    const result = await pgPool.query("SELECT id, username FROM operator_users");
+    const result = await pgPool.query("SELECT id, username, token FROM operator_users");
     res.json(result.rows);
   } catch (error: any) { res.status(200).json({ error: error.message, is_500: true }); }
 });
@@ -306,6 +306,14 @@ app.delete("/api/admin/operators/:id", async (req, res) => {
   try {
     if (!pgPool) return res.status(200).json({ error: "Database not connected", is_500: true });
     await pgPool.query("DELETE FROM operator_users WHERE id = $1", [req.params.id]);
+    res.json({ success: true });
+  } catch (error: any) { res.status(200).json({ error: error.message, is_500: true }); }
+});
+
+app.post("/api/admin/operators/:id/logout", async (req, res) => {
+  try {
+    if (!pgPool) return res.status(200).json({ error: "Database not connected", is_500: true });
+    await pgPool.query("UPDATE operator_users SET token = NULL WHERE id = $1", [req.params.id]);
     res.json({ success: true });
   } catch (error: any) { res.status(200).json({ error: error.message, is_500: true }); }
 });
