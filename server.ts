@@ -20,7 +20,7 @@ app.use((req, res, next) => {
   next();
 });
 
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
 
 const DB_URL = process.env.DATABASE_URL || (process.env.DB_HOST ? `mysql://${process.env.DB_USER || "root"}:${process.env.DB_PASS || ""}@${process.env.DB_HOST}/${process.env.DB_NAME || "test"}` : undefined);
 if (!DB_URL) {
@@ -782,7 +782,7 @@ app.post("/api/arena/:arena/undo", async (req, res) => {
   } catch (error: any) { res.status(200).json({ error: error.message, is_500: true }); }
 });
 
-app.listen(PORT as number, "0.0.0.0", () => {
+app.listen(PORT, () => {
   console.log(`Server running at http://0.0.0.0:${PORT}`);
 });
 
