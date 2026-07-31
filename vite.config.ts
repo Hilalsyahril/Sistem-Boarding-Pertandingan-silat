@@ -1,21 +1,25 @@
-
 import react from '@vitejs/plugin-react';
 import path from 'path';
 import {defineConfig} from 'vite';
+import legacy from '@vitejs/plugin-legacy';
 
 export default defineConfig(() => {
   return {
-    plugins: [react()],
+    plugins: [
+      react(),
+      legacy({
+        targets: ['defaults', 'ie >= 11', 'chrome >= 38', 'safari >= 9', 'samsung >= 4'],
+        additionalLegacyPolyfills: ['regenerator-runtime/runtime'],
+        polyfills: true
+      })
+    ],
     resolve: {
       alias: {
         '@': path.resolve(__dirname, '.'),
       },
     },
     server: {
-      // HMR is disabled in AI Studio via DISABLE_HMR env var.
-      // Do not modifyâfile watching is disabled to prevent flickering during agent edits.
       hmr: process.env.DISABLE_HMR !== 'true',
-      // Disable file watching when DISABLE_HMR is true to save CPU during agent edits.
       watch: process.env.DISABLE_HMR === 'true' ? null : {},
     },
   };
