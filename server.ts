@@ -5,7 +5,13 @@ import path from "path";
 import dotenv from "dotenv";
 import mysql from "mysql2/promise";
 import pg from "pg";
-import { DatabaseSync } from "node:sqlite";
+
+let DatabaseSync: any = null;
+try {
+  DatabaseSync = require("node:sqlite").DatabaseSync;
+} catch {
+  // node:sqlite not supported on Node < 22
+}
 
 dotenv.config();
 
@@ -33,6 +39,13 @@ let pgPool: any = null;
 
 function createSqlitePool() {
   try {
+    if (!DatabaseSync) {
+      console.warn("[DB] node:sqlite is not supported on this Node.js runtime version.");
+      return {
+        type: "none",
+        query: async () => ({ rows: [], rowCount: 0 })
+      };
+    }
     const dbPath = path.join(process.cwd(), "local_data.sqlite");
     const sqliteDb = new DatabaseSync(dbPath);
     console.log("[DB] Using local SQLite database at:", dbPath);
@@ -815,9 +828,15 @@ async function startServer() {
     });
   }
 
-  app.listen(PORT as number, "0.0.0.0", () => {
-    console.log(`Server running at http://0.0.0.0:${PORT}`);
-  });
+  if (process.env.PORT) {
+    app.listen(process.env.PORT, () => {
+      console.log(`Server running on port/socket ${process.env.PORT}`);
+    });
+  } else {
+    app.listen(3000, "0.0.0.0", () => {
+      console.log(`Server running at http://0.0.0.0:3000`);
+    });
+  }
 }
 
 startServer();
