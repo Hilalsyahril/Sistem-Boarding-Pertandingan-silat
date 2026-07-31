@@ -42,7 +42,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
       await fetch("/api/pengaturan_arena", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ jumlah_arena: jumlahArena, judul_aplikasi: judulAplikasi, auto_next: newVal })
+        body: JSON.stringify({ auto_next: newVal })
       });
       if (!newVal) {
         await fetch("/api/pesilat/timer-all", {
@@ -611,30 +611,47 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
         // Map header excel ke model Pesilat
         // Kita dukung nama kolom bahasa Indonesia/Inggris
         const mappedItems = rawData.map((row: any) => {
-          // Cari property dengan membandingkan lowercase & hanya menyisakan karakter alfanumerik (menghilangkan spasi, tanda kurung, dsb.)
-          const getVal = (keys: string[]) => {
-            const foundKey = Object.keys(row).find(k => 
-              keys.some(key => k.toLowerCase().replace(/[^a-z0-9]/g, "") === key.toLowerCase().replace(/[^a-z0-9]/g, ""))
-            );
-            return foundKey ? row[foundKey] : undefined;
+          const keys = Object.keys(row);
+          
+          const findKey = (keywords: string[], exclude: string[] = []) => {
+            return keys.find(k => {
+              const kLower = k.toLowerCase().replace(/[^a-z0-9]/g, "");
+              const hasKeyword = keywords.some(kw => kLower.includes(kw));
+              const hasExclude = exclude.some(ex => kLower.includes(ex));
+              return hasKeyword && !hasExclude;
+            });
           };
 
-          const getValStr = (keys: string[], defaultVal = "") => {
-            const val = getVal(keys);
-            if (val === undefined || val === null) return defaultVal;
-            return String(val).trim();
-          };
+          const arenaKey = findKey(["arena", "gelanggang"]);
+          const nomorPartaiKey = findKey(["partai", "no", "nomor"]);
+          
+          // Merah
+          const namaMerahKey = findKey(["merah"], ["kontingen"]) || findKey(["pesilat", "nama", "atlit"], ["biru", "kontingen"]); 
+          const kontingenMerahKey = findKey(["merah"], ["nama", "pesilat", "atlit"]) || findKey(["kontingen"], ["biru"]);
+          
+          // Biru
+          const namaBiruKey = findKey(["biru"], ["kontingen"]) || findKey(["pesilatbiru", "namabiru", "atlitbiru"]);
+          const kontingenBiruKey = findKey(["biru"], ["nama", "pesilat", "atlit"]) || findKey(["kontingenbiru"]);
+          
+          const kelasKey = findKey(["kelas"]);
+          const kategoriKey = findKey(["kategori"]);
+          const genderKey = findKey(["gender", "kelamin", "putra", "putri", "sex"]);
+          const durationKey = findKey(["durasi", "waktu", "timer", "detik"]);
 
-          const arenaVal = Number(getVal(["arena", "gelanggang"])) || 1;
-          const nomorPartai = getValStr(["nomorpartai", "partai", "nopartai", "no", "number", "nomor_partai"], "01");
-          const namaMerah = getValStr(["sudutmerahnamapesilat", "nama_pesilat", "namapesilat", "pesilat", "nama_merah", "merah_nama", "sudut_merah", "pesilat_merah", "sudutmerahnama"]);
-          const kontingenMerah = getValStr(["sudutmerahkontingen", "kontingen", "kontingen_merah", "sudut_merah_kontingen", "merah_kontingen", "kontingen_merah", "sudutmerahkontingen"]);
-          const namaBiru = getValStr(["sudutbirunamapesilat", "nama_pesilat_biru", "namapesilatbiru", "pesilat_biru", "nama_biru", "biru_nama", "sudut_biru", "pesilat_biru", "sudutbirunama"]);
-          const kontingenBiru = getValStr(["sudutbirukontingen", "kontingen_biru", "sudut_biru_kontingen", "biru_kontingen", "sudutbirukontingen"]);
-          const kelas = getValStr(["kelas", "kelas_tanding", "kelastanding"], "Kelas A");
-          const kategori = getValStr(["kategori", "kategori_tanding", "kategoritanding"], "Tanding");
-          const gender = getValStr(["gender", "jenis_kelamin", "putra_putri", "sex", "putraputri", "jeniskelamin"], "Putra");
-          const duration = Number(getVal(["timer_duration", "durasi", "waktu", "duration", "durasitimerdetik", "durasitimer"])) || (kategori.toLowerCase().includes("tunggal") || kategori.toLowerCase().includes("ganda") || kategori.toLowerCase().includes("regu") || kategori.toLowerCase() === "seni" ? 180 : 120);
+          const arenaVal = Number(arenaKey ? row[arenaKey] : 1) || 1;
+          const nomorPartai = (nomorPartaiKey ? String(row[nomorPartaiKey]) : "01").trim();
+          
+          const namaMerah = (namaMerahKey ? String(row[namaMerahKey]) : "").trim();
+          const kontingenMerah = (kontingenMerahKey ? String(row[kontingenMerahKey]) : "").trim();
+          
+          const namaBiru = (namaBiruKey ? String(row[namaBiruKey]) : "").trim();
+          const kontingenBiru = (kontingenBiruKey ? String(row[kontingenBiruKey]) : "").trim();
+          
+          const kelas = (kelasKey ? String(row[kelasKey]) : "Kelas A").trim();
+          const kategori = (kategoriKey ? String(row[kategoriKey]) : "Tanding").trim();
+          const gender = (genderKey ? String(row[genderKey]) : "Putra").trim();
+          const durationRaw = durationKey ? Number(row[durationKey]) : 0;
+          const duration = durationRaw || (kategori.toLowerCase().includes("tunggal") || kategori.toLowerCase().includes("ganda") || kategori.toLowerCase().includes("regu") || kategori.toLowerCase() === "seni" ? 180 : 120);
 
           return {
             arena: arenaVal,
@@ -1261,15 +1278,13 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                         <label className="block text-[10px] font-bold text-slate-400 mb-1.5 uppercase tracking-widest font-mono">
                           Gender
                         </label>
-                        <select
+                        <input
+                          type="text"
                           value={gender}
                           onChange={(e) => setGender(e.target.value)}
                           className="w-full bg-slate-950 border border-slate-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-white rounded-xl px-2 py-2.5 outline-none transition text-xs sm:text-sm"
-                        >
-                          {opsiGender.map((g) => (
-                            <option key={g} value={g}>{g}</option>
-                          ))}
-                        </select>
+                          placeholder="Ketik Gender..."
+                        />
                       </div>
 
                       <div>
@@ -1278,17 +1293,11 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                         </label>
                         <input
                           type="text"
-                          list="opsiKategoriList"
                           value={kategori}
                           onChange={(e) => setKategori(e.target.value)}
                           className="w-full bg-slate-950 border border-slate-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-white rounded-xl px-2 py-2.5 outline-none transition text-xs sm:text-sm"
-                          placeholder="Pilih/Ketik Kategori..."
+                          placeholder="Ketik Kategori..."
                         />
-                        <datalist id="opsiKategoriList">
-                          {opsiKategori.map((k) => (
-                            <option key={k} value={k} />
-                          ))}
-                        </datalist>
                       </div>
                     </div>
 
@@ -1298,17 +1307,11 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                       </label>
                       <input
                         type="text"
-                        list="opsiKelasList"
                         value={kelas}
                         onChange={(e) => setKelas(e.target.value)}
                         className="w-full bg-slate-950 border border-slate-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-white rounded-xl px-2.5 py-2.5 outline-none transition text-xs sm:text-sm"
-                        placeholder="Pilih/Ketik Kelas..."
+                        placeholder="Ketik Kelas..."
                       />
-                      <datalist id="opsiKelasList">
-                        {opsiKelas.map((k) => (
-                          <option key={k} value={k} />
-                        ))}
-                      </datalist>
                     </div>
 
                     <div>

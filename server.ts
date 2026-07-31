@@ -28,15 +28,17 @@ if (!DB_URL) {
 }
 
 const isPostgres = DB_URL ? DB_URL.startsWith('postgres://') || DB_URL.startsWith('postgresql://') : false;
-
+const isMysql = DB_URL ? DB_URL.startsWith('mysql://') : false;
 let rawPool: mysql.Pool | null = null;
 let realPgPool: pg.Pool | null = null;
 
 if (DB_URL) {
   if (isPostgres) {
     realPgPool = new pg.Pool({ connectionString: DB_URL });
-  } else {
+  } else if (isMysql) {
     rawPool = mysql.createPool(DB_URL);
+  } else {
+    console.error("DATABASE_URL is not a valid postgres:// or mysql:// connection string.");
   }
 }
 
@@ -383,7 +385,7 @@ app.post("/api/pesilat/batch", async (req, res) => {
     for (const item of items) {
       await insertPesilat({ ...item, id: item.id || Date.now().toString() + Math.random().toString(), timer_last_updated_at: Date.now() });
     }
-    res.json(await getPesilats());
+    res.json({ success: true, count: items.length });
   } catch (error: any) { res.status(200).json({ error: error.message, is_500: true }); }
 });
 
@@ -546,8 +548,12 @@ app.get("/api/pengaturan_arena", async (req, res) => {
 
 app.put("/api/pengaturan_arena", async (req, res) => {
   try {
-    const autoNext = req.body.auto_next !== undefined ? req.body.auto_next : true;
-    await setPengaturanArena(req.body.jumlah_arena || 3, req.body.judul_aplikasi || 'SISTEM BOARDING PENCAK SILAT', autoNext);
+    const currentConfig = await getPengaturanArena();
+    const autoNext = req.body.auto_next !== undefined ? req.body.auto_next : currentConfig.auto_next;
+    const jumlahArena = req.body.jumlah_arena !== undefined ? req.body.jumlah_arena : currentConfig.jumlah_arena;
+    const judulAplikasi = req.body.judul_aplikasi !== undefined ? req.body.judul_aplikasi : currentConfig.judul_aplikasi;
+    
+    await setPengaturanArena(jumlahArena, judulAplikasi, autoNext);
     const config = await getPengaturanArena();
     res.json({ id: "00000000-0000-0000-0000-000000000001", ...config });
   } catch (error: any) { res.status(200).json({ error: error.message, is_500: true }); }

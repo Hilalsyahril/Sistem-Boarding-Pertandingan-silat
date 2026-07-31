@@ -89,7 +89,7 @@ export default function OperatorDashboard({ onLogout, username }: { onLogout: ()
       await fetch("/api/pengaturan_arena", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ jumlah_arena: jumlahArena, auto_next: newVal })
+        body: JSON.stringify({ auto_next: newVal })
       });
       if (!newVal) {
         await fetch("/api/pesilat/timer-all", {
