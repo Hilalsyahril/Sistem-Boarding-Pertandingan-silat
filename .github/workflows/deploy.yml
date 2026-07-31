@@ -48,9 +48,6 @@ jobs:
         # Gunakan server.cjs sebagai app.js (Entry point cPanel)
         echo "require('./server.cjs');" > deploy_folder/app.js
 
-        # Install production dependencies inside deploy_folder
-        cd deploy_folder && npm install --omit=dev && cd ..
-
     - name: Deploy to FTP
       uses: SamKirkland/FTP-Deploy-Action@v4.3.5
       with:
@@ -70,4 +67,6 @@ jobs:
           .cagefs
           .npm
           .php
+          node_modules/**
+          node_modules
 

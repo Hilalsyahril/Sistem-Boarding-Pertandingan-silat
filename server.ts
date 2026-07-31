@@ -781,11 +781,11 @@ app.post("/api/arena/:arena/undo", async (req, res) => {
 });
 
 async function startServer() {
-  await setupDatabaseConnection();
   try {
+    await setupDatabaseConnection();
     await initDb();
   } catch (err: any) {
-    console.error("Database init error:", err.message || err);
+    console.error("Database setup or init error:", err.message || err);
   }
 
   const isProd = process.env.NODE_ENV === "production" || !fs.existsSync(path.join(process.cwd(), "vite.config.ts"));
