@@ -610,8 +610,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
 
         // Map header excel ke model Pesilat
         // Kita dukung nama kolom bahasa Indonesia/Inggris
-        const baseTime = Date.now();
-        const mappedItems = rawData.map((row: any, index: number) => {
+        const mappedItems = rawData.map((row: any) => {
           const keys = Object.keys(row);
           
           const findKeyExactOrIncludes = (exactMatches, includeMatches = [], excludeMatches = []) => {
@@ -629,10 +628,10 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
           };
 
           const nomorPartaiKey = findKeyExactOrIncludes(["Nomor Partai", "No Partai"], ["partai", "no", "nomor"]);
-          const namaMerahKey = findKeyExactOrIncludes(["Sudut Merah (Nama Pesilat)", "Nama Pesilat Merah", "Nama Pesilat", "Nama Atlit", "Nama Atlet", "Nama"], ["merah", "nama pesilat", "nama atlit", "nama"], ["kontingen", "biru", "asal"]);
-          const kontingenMerahKey = findKeyExactOrIncludes(["Sudut Merah (Kontingen)", "Kontingen Merah", "Kontingen", "Asal"], ["merah", "kontingen", "asal"], ["nama", "pesilat", "atlit", "biru"]);
-          const namaBiruKey = findKeyExactOrIncludes(["Sudut Biru (Nama Pesilat)", "Nama Pesilat Biru", "Nama Pesilat 2", "Nama 2"], ["biru", "nama pesilat 2"], ["kontingen", "merah", "asal"]);
-          const kontingenBiruKey = findKeyExactOrIncludes(["Sudut Biru (Kontingen)", "Kontingen Biru", "Kontingen 2", "Asal 2"], ["biru", "kontingen 2"], ["nama", "pesilat", "atlit", "merah"]);
+          const namaBiruKey = findKeyExactOrIncludes(["Sudut Biru (Nama Pesilat)", "Nama Pesilat Biru"], ["biru"], ["kontingen"]);
+          const kontingenBiruKey = findKeyExactOrIncludes(["Sudut Biru (Kontingen)", "Kontingen Biru"], ["biru"], ["nama", "pesilat", "atlit"]);
+          const namaMerahKey = findKeyExactOrIncludes(["Sudut Merah (Nama Pesilat)", "Nama Pesilat Merah"], ["merah"], ["kontingen"]);
+          const kontingenMerahKey = findKeyExactOrIncludes(["Sudut Merah (Kontingen)", "Kontingen Merah"], ["merah"], ["nama", "pesilat", "atlit"]);
           
           const kelasKey = findKeyExactOrIncludes(["Kelas"], ["kelas"]);
           const kategoriKey = findKeyExactOrIncludes(["Kategori"], ["kategori"]);
@@ -677,10 +676,9 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
             kelas: kelas,
             kategori: kategori,
             gender: gender,
-            timer_duration: duration,
-            created_at: baseTime + index
+            timer_duration: duration
           };
-        }); // Removed filter so it can import even if mapping is slightly off
+        }).filter(item => item.nama_pesilat || item.nama_pesilat_biru);
 
         if (mappedItems.length === 0) {
           throw new Error("Format kolom Excel tidak cocok atau tidak ada baris data valid (salah satu nama atlet harus diisi).");
@@ -692,17 +690,16 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
           body: JSON.stringify({ items: mappedItems })
         });
 
-        let resData: any = {};
+        let resData = {};
         try {
           resData = await res.json();
         } catch (e) {}
-        
-        if (!res.ok || resData.status === "error" || resData.error) {
-          throw new Error(resData.message || resData.error || "Gagal menyimpan data import ke server.");
+        if (!res.ok) {
+          throw new Error((resData as any).error || "Gagal menyimpan data import ke server.");
         }
 
-        setSuccess(`Berhasil mengimpor ${resData.count} data partai/pesilat dari Excel!`);
-        await fetchInitialData();
+        setSuccess(`Berhasil mengimpor ${(resData as any).count} data partai/pesilat dari Excel!`);
+        fetchInitialData();
       } catch (err: any) {
         setError(err.message || "Gagal mengimpor file Excel.");
       } finally {
@@ -1066,7 +1063,16 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
       if (a.arena !== b.arena) {
         return a.arena - b.arena;
       }
-      return (Number(a.created_at) || 0) - (Number(b.created_at) || 0);
+      const numA = parseFloat(a.nomor_partai);
+      const numB = parseFloat(b.nomor_partai);
+      const isNumA = !isNaN(numA) && isFinite(numA);
+      const isNumB = !isNaN(numB) && isFinite(numB);
+      if (isNumA && isNumB) {
+        return numA - numB;
+      }
+      if (isNumA) return -1;
+      if (isNumB) return 1;
+      return a.nomor_partai.localeCompare(b.nomor_partai, undefined, { numeric: true, sensitivity: "base" });
     });
 
   return (
