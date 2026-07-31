@@ -103,12 +103,6 @@ async function initDb() {
     await pgPool.query(`ALTER TABLE pengaturan_arena ADD COLUMN judul_aplikasi VARCHAR(255) DEFAULT 'SISTEM BOARDING PENCAK SILAT'`);
     await pgPool.query(`ALTER TABLE pengaturan_arena ADD COLUMN auto_next BOOLEAN DEFAULT true`);
     try {
-      await pgPool.query(`ALTER TABLE pesilat ADD COLUMN created_at BIGINT`);
-    } catch(e) {}
-    try {
-      await pgPool.query(`UPDATE pesilat SET created_at = 0 WHERE created_at IS NULL`);
-    } catch(e) {}
-    try {
       await pgPool.query(`ALTER TABLE pesilat ALTER COLUMN arena TYPE TEXT USING arena::TEXT`);
     } catch(e) {
       // Ignored if already text or column doesn't exist yet
@@ -132,7 +126,6 @@ async function initDb() {
       timer_seconds_left INTEGER,
       timer_running BOOLEAN DEFAULT false,
       timer_last_updated_at BIGINT,
-      created_at BIGINT,
       is_done BOOLEAN DEFAULT false
     )`);
   await pgPool.query(`CREATE TABLE IF NOT EXISTS admin_users (
@@ -172,7 +165,6 @@ function mapPesilat(row: any) {
 
   return {
     ...row,
-    created_at: row.created_at ? Number(row.created_at) : 0,
     is_playing,
     timer_running: timer_seconds_left > 0 ? timer_running : false,
     timer_seconds_left,
@@ -204,7 +196,9 @@ async function getPesilats() {
     if (a.arena !== b.arena) {
       return (Number(a.arena) || 0) - (Number(b.arena) || 0);
     }
-    return (Number(a.created_at) || 0) - (Number(b.created_at) || 0);
+    const numA = parseInt((a.nomor_partai || "").toString().replace(/[^0-9]/g, ''), 10) || 0;
+    const numB = parseInt((b.nomor_partai || "").toString().replace(/[^0-9]/g, ''), 10) || 0;
+    return numA - numB;
   });
 }
 
@@ -220,12 +214,12 @@ async function insertPesilat(p: any) {
     INSERT INTO pesilat (
       id, nomor_partai, nama_pesilat, kontingen, nama_pesilat_biru, kontingen_biru,
       kelas, kategori, gender, arena, is_playing, timer_duration, timer_seconds_left,
-      timer_running, timer_last_updated_at, is_done, created_at
-    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+      timer_running, timer_last_updated_at, is_done
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
   `, [
     p.id, p.nomor_partai, p.nama_pesilat, p.kontingen, p.nama_pesilat_biru || "", p.kontingen_biru || "",
     p.kelas, p.kategori, p.gender, p.arena, p.is_playing ? true : false, p.timer_duration, p.timer_seconds_left,
-    p.timer_running ? true : false, p.timer_last_updated_at || null, p.is_done ? true : false, p.created_at || Date.now()
+    p.timer_running ? true : false, p.timer_last_updated_at || null, p.is_done ? true : false
   ]);
 }
 
@@ -500,7 +494,14 @@ app.put("/api/pesilat/:id/timeout", async (req, res) => {
 
     const all = await getPesilats();
     const arenaMatches = all.filter(match => (parseInt(String(match.arena).replace(/\D/g, ''), 10) || match.arena) === (parseInt(String(p.arena).replace(/\D/g, ''), 10) || p.arena)).sort((a, b) => {
-      return (Number(a.created_at) || 0) - (Number(b.created_at) || 0);
+      const numA = parseFloat(a.nomor_partai);
+      const numB = parseFloat(b.nomor_partai);
+      const isNumA = !isNaN(numA) && isFinite(numA);
+      const isNumB = !isNaN(numB) && isFinite(numB);
+      if (isNumA && isNumB) return numA - numB;
+      if (isNumA) return -1;
+      if (isNumB) return 1;
+      return String(a.nomor_partai || "").localeCompare(String(b.nomor_partai || ""), undefined, { numeric: true, sensitivity: "base" });
     });
     const currentIndex = arenaMatches.findIndex(match => match.id === id);
     if (autoNext && currentIndex !== -1) {
@@ -693,7 +694,14 @@ app.post("/api/arena/:arena/next", async (req, res) => {
     const arenaNum = parseInt(req.params.arena, 10);
     const all = await getPesilats();
     const arenaMatches = all.filter(match => (parseInt(String(match.arena).replace(/\D/g, ''), 10) === arenaNum || String(match.arena) === String(arenaNum))).sort((a, b) => {
-      return (Number(a.created_at) || 0) - (Number(b.created_at) || 0);
+      const numA = parseFloat(a.nomor_partai);
+      const numB = parseFloat(b.nomor_partai);
+      const isNumA = !isNaN(numA) && isFinite(numA);
+      const isNumB = !isNaN(numB) && isFinite(numB);
+      if (isNumA && isNumB) return numA - numB;
+      if (isNumA) return -1;
+      if (isNumB) return 1;
+      return String(a.nomor_partai || "").localeCompare(String(b.nomor_partai || ""), undefined, { numeric: true, sensitivity: "base" });
     });
     
     const pengaturan = await getPengaturanArena();
@@ -729,7 +737,14 @@ app.post("/api/arena/:arena/undo", async (req, res) => {
     const arenaNum = parseInt(req.params.arena, 10);
     const all = await getPesilats();
     const arenaMatches = all.filter(match => (parseInt(String(match.arena).replace(/\D/g, ''), 10) === arenaNum || String(match.arena) === String(arenaNum))).sort((a, b) => {
-      return (Number(b.created_at) || 0) - (Number(a.created_at) || 0);
+      const numA = parseFloat(a.nomor_partai);
+      const numB = parseFloat(b.nomor_partai);
+      const isNumA = !isNaN(numA) && isFinite(numA);
+      const isNumB = !isNaN(numB) && isFinite(numB);
+      if (isNumA && isNumB) return numB - numA; // Sort descending to find the last done match
+      if (isNumA) return -1;
+      if (isNumB) return 1;
+      return String(b.nomor_partai || "").localeCompare(String(a.nomor_partai || ""), undefined, { numeric: true, sensitivity: "base" });
     });
     
     // Find currently playing

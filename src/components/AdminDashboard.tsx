@@ -67,7 +67,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
   const [kelas, setKelas] = useState<string>("Kelas A");
   const [kategori, setKategori] = useState<string>("Tanding");
   const [gender, setGender] = useState<string>("Putra");
-  const [arena, setArena] = useState<number>(1);
+  const [arena, setArena] = useState<number | string>(1);
   const [timerDuration, setTimerDuration] = useState<number>(120);
   const [timerInputStr, setTimerInputStr] = useState<string>("00:02:00");
   const [isTimerInputFocused, setIsTimerInputFocused] = useState<boolean>(false);
@@ -610,47 +610,61 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
 
         // Map header excel ke model Pesilat
         // Kita dukung nama kolom bahasa Indonesia/Inggris
-        const mappedItems = rawData.map((row: any) => {
+        const baseTime = Date.now();
+        const mappedItems = rawData.map((row: any, index: number) => {
           const keys = Object.keys(row);
           
-          const findKey = (keywords: string[], exclude: string[] = []) => {
+          const findKeyExactOrIncludes = (exactMatches, includeMatches = [], excludeMatches = []) => {
+            // First try exact match (case insensitive)
+            const exact = keys.find(k => exactMatches.some(em => k.toLowerCase().trim() === em.toLowerCase()));
+            if (exact) return exact;
+            
+            // Then try includes
             return keys.find(k => {
               const kLower = k.toLowerCase().replace(/[^a-z0-9]/g, "");
-              const hasKeyword = keywords.some(kw => kLower.includes(kw));
-              const hasExclude = exclude.some(ex => kLower.includes(ex));
+              const hasKeyword = includeMatches.some(kw => kLower.includes(kw));
+              const hasExclude = excludeMatches.some(ex => kLower.includes(ex));
               return hasKeyword && !hasExclude;
             });
           };
 
-          const arenaKey = findKey(["arena", "gelanggang"]);
-          const nomorPartaiKey = findKey(["partai", "no", "nomor"]);
+          const nomorPartaiKey = findKeyExactOrIncludes(["Nomor Partai", "No Partai"], ["partai", "no", "nomor"]);
+          const namaBiruKey = findKeyExactOrIncludes(["Sudut Biru (Nama Pesilat)", "Nama Pesilat Biru"], ["biru"], ["kontingen"]);
+          const kontingenBiruKey = findKeyExactOrIncludes(["Sudut Biru (Kontingen)", "Kontingen Biru"], ["biru"], ["nama", "pesilat", "atlit"]);
+          const namaMerahKey = findKeyExactOrIncludes(["Sudut Merah (Nama Pesilat)", "Nama Pesilat Merah"], ["merah"], ["kontingen"]);
+          const kontingenMerahKey = findKeyExactOrIncludes(["Sudut Merah (Kontingen)", "Kontingen Merah"], ["merah"], ["nama", "pesilat", "atlit"]);
           
-          // Merah
-          const namaMerahKey = findKey(["merah"], ["kontingen"]) || findKey(["pesilat", "nama", "atlit"], ["biru", "kontingen"]); 
-          const kontingenMerahKey = findKey(["merah"], ["nama", "pesilat", "atlit"]) || findKey(["kontingen"], ["biru"]);
-          
-          // Biru
-          const namaBiruKey = findKey(["biru"], ["kontingen"]) || findKey(["pesilatbiru", "namabiru", "atlitbiru"]);
-          const kontingenBiruKey = findKey(["biru"], ["nama", "pesilat", "atlit"]) || findKey(["kontingenbiru"]);
-          
-          const kelasKey = findKey(["kelas"]);
-          const kategoriKey = findKey(["kategori"]);
-          const genderKey = findKey(["gender", "kelamin", "putra", "putri", "sex"]);
-          const durationKey = findKey(["durasi", "waktu", "timer", "detik"]);
+          const kelasKey = findKeyExactOrIncludes(["Kelas"], ["kelas"]);
+          const kategoriKey = findKeyExactOrIncludes(["Kategori"], ["kategori"]);
+          const genderKey = findKeyExactOrIncludes(["Gender", "Jenis Kelamin"], ["gender", "kelamin", "putra", "putri", "sex"]);
+          const arenaKey = findKeyExactOrIncludes(["Arena", "Gelanggang"], ["arena", "gelanggang"]);
+          const durationKey = findKeyExactOrIncludes(["Durasi Timer (Detik)", "Durasi Timer", "Timer"], ["durasi", "waktu", "timer", "detik"]);
 
-          const arenaVal = Number(arenaKey ? row[arenaKey] : 1) || 1;
+          const arenaVal = arenaKey ? String(row[arenaKey]).trim() : "1";
           const nomorPartai = (nomorPartaiKey ? String(row[nomorPartaiKey]) : "01").trim();
           
-          const namaMerah = (namaMerahKey ? String(row[namaMerahKey]) : "").trim();
-          const kontingenMerah = (kontingenMerahKey ? String(row[kontingenMerahKey]) : "").trim();
+          let namaMerah = (namaMerahKey ? String(row[namaMerahKey]) : "").trim();
+          let kontingenMerah = (kontingenMerahKey ? String(row[kontingenMerahKey]) : "").trim();
+          let namaBiru = (namaBiruKey ? String(row[namaBiruKey]) : "").trim();
+          let kontingenBiru = (kontingenBiruKey ? String(row[kontingenBiruKey]) : "").trim();
           
-          const namaBiru = (namaBiruKey ? String(row[namaBiruKey]) : "").trim();
-          const kontingenBiru = (kontingenBiruKey ? String(row[kontingenBiruKey]) : "").trim();
+          const normalizeEmpty = (val) => {
+            if (!val || val === "-" || val.toUpperCase() === "NO PARTITION") return "";
+            return val;
+          };
           
+          namaMerah = normalizeEmpty(namaMerah);
+          kontingenMerah = normalizeEmpty(kontingenMerah);
+          namaBiru = normalizeEmpty(namaBiru);
+          kontingenBiru = normalizeEmpty(kontingenBiru);
+
           const kelas = (kelasKey ? String(row[kelasKey]) : "Kelas A").trim();
           const kategori = (kategoriKey ? String(row[kategoriKey]) : "Tanding").trim();
           const gender = (genderKey ? String(row[genderKey]) : "Putra").trim();
-          const durationRaw = durationKey ? Number(row[durationKey]) : 0;
+          
+          let durationRaw = durationKey ? parseInt(String(row[durationKey]).replace(/\D/g, ''), 10) : 0;
+          if (isNaN(durationRaw)) durationRaw = 0;
+          
           const duration = durationRaw || (kategori.toLowerCase().includes("tunggal") || kategori.toLowerCase().includes("ganda") || kategori.toLowerCase().includes("regu") || kategori.toLowerCase() === "seni" ? 180 : 120);
 
           return {
@@ -663,7 +677,8 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
             kelas: kelas,
             kategori: kategori,
             gender: gender,
-            timer_duration: duration
+            timer_duration: duration,
+            created_at: baseTime + index
           };
         }).filter(item => item.nama_pesilat || item.nama_pesilat_biru);
 
@@ -898,7 +913,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
       kelas,
       kategori,
       gender,
-      arena: Number(arena),
+      arena: arena,
       timer_duration: timerDuration
     };
 
@@ -949,7 +964,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
     setKelas(p.kelas);
     setKategori(p.kategori);
     setGender(p.gender);
-    setArena(p.arena);
+    setArena(p.arena ? (parseInt(String(p.arena).replace(/\D/g, ''), 10) || String(p.arena)) : 1);
     setTimerDuration(p.timer_duration || 120);
     
     // Scroll to form on mobile
@@ -1050,16 +1065,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
       if (a.arena !== b.arena) {
         return a.arena - b.arena;
       }
-      const numA = parseFloat(a.nomor_partai);
-      const numB = parseFloat(b.nomor_partai);
-      const isNumA = !isNaN(numA) && isFinite(numA);
-      const isNumB = !isNaN(numB) && isFinite(numB);
-      if (isNumA && isNumB) {
-        return numA - numB;
-      }
-      if (isNumA) return -1;
-      if (isNumB) return 1;
-      return a.nomor_partai.localeCompare(b.nomor_partai, undefined, { numeric: true, sensitivity: "base" });
+      return (Number(a.created_at) || 0) - (Number(b.created_at) || 0);
     });
 
   return (
@@ -1346,7 +1352,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                       </label>
                       <select
                         value={arena}
-                        onChange={(e) => setArena(Number(e.target.value))}
+                        onChange={(e) => setArena(e.target.value)}
                         className="w-full bg-slate-950 border border-slate-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-white rounded-xl px-2.5 py-2.5 outline-none transition font-semibold text-xs sm:text-sm"
                       >
                         {Array.from({ length: jumlahArena }, (_, i) => i + 1).map((num) => (
@@ -1410,7 +1416,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                   {Array.from({ length: jumlahArena }, (_, idx) => {
                     const arenaNum = idx + 1;
                     // Temukan pesilat yang is_playing === true di arena ini
-                    const activePesilat = pesilatList.find(p => p.arena === arenaNum && p.is_playing);
+                    const activePesilat = pesilatList.find(p => (parseInt(String(p.arena).replace(/\D/g, ''), 10) === arenaNum || String(p.arena) === String(arenaNum)) && p.is_playing);
 
                     return (
                       <div 
@@ -1829,7 +1835,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                             </td>
                             <td className="p-2 sm:p-3 text-center shrink-0">
                               <span className="bg-slate-950 text-indigo-400 border border-slate-800 px-1.5 sm:px-2.5 py-0.5 sm:py-1 rounded font-mono font-bold text-[10px] sm:text-xs shadow-inner">
-                                G-{p.arena}
+                                G-{parseInt(String(p.arena).replace(/\D/g, ''), 10) || p.arena}
                               </span>
                             </td>
                             <td className="p-2 sm:p-3 text-right">
