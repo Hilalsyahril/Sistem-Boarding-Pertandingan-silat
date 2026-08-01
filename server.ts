@@ -21,7 +21,8 @@ try {
   // node:sqlite not supported on Node < 22
 }
 
-dotenv.config({ path: path.join(__dirname, ".env") });
+const appDir = typeof __dirname !== "undefined" ? __dirname : process.cwd();
+dotenv.config({ path: path.join(appDir, ".env") });
 dotenv.config({ path: path.join(process.cwd(), ".env") });
 
 const app = express();
@@ -326,7 +327,8 @@ function createSqlitePool() {
 }
 
 async function setupDatabaseConnection() {
-  dotenv.config({ path: path.join(__dirname, ".env") });
+  const currentAppDir = typeof __dirname !== "undefined" ? __dirname : process.cwd();
+  dotenv.config({ path: path.join(currentAppDir, ".env") });
   dotenv.config({ path: path.join(process.cwd(), ".env") });
 
   const envDbUser = process.env.DB_USER || process.env.DB_USERNAME;
@@ -364,7 +366,7 @@ async function setupDatabaseConnection() {
           connectionLimit: 10
         };
         rawPool = mysql.createPool(poolConfig);
-        rawPool.on('error', (err) => console.error('MySQL Pool Error:', err.message));
+        (rawPool as any).on('error', (err: any) => console.error('MySQL Pool Error:', err?.message || err));
 
         await Promise.race([
           rawPool.query("SELECT 1"),
@@ -1118,13 +1120,21 @@ async function startServer() {
   }
 
   // Start HTTP server immediately
-  if (process.env.PORT) {
-    app.listen(process.env.PORT, () => {
-      console.log(`Server running on port/socket ${process.env.PORT}`);
+  const portEnv = process.env.PORT;
+  if (!isProd) {
+    // Dev mode in AI Studio MUST ALWAYS listen on port 3000 and 0.0.0.0
+    app.listen(3000, "0.0.0.0", () => {
+      console.log(`[Dev] Server running at http://0.0.0.0:3000`);
+    });
+  } else if (portEnv && (portEnv.startsWith("/") || portEnv.startsWith("\\") || isNaN(Number(portEnv)))) {
+    // Phusion Passenger unix domain socket
+    app.listen(portEnv, () => {
+      console.log(`[Prod Passenger] Server running on socket ${portEnv}`);
     });
   } else {
-    app.listen(3000, "0.0.0.0", () => {
-      console.log(`Server running at http://0.0.0.0:3000`);
+    const prodPort = portEnv ? Number(portEnv) : 3000;
+    app.listen(prodPort, "0.0.0.0", () => {
+      console.log(`[Prod] Server running at http://0.0.0.0:${prodPort}`);
     });
   }
 
