@@ -298,13 +298,12 @@ export default function PublicDisplay() {
       if (!isAudioEnabled) return;
       try {
         const res = await fetch(`/api/announce?_t=${Date.now()}`);
-        if (!res.ok) throw new Error("Server Error " + res.status);
+        if (res.status === 429 || !res.ok) return;
         const textData = await res.text();
         let data;
         try {
           data = JSON.parse(textData);
         } catch (e) {
-          console.warn("API returned invalid JSON:", textData.substring(0, 50));
           return;
         }
         if (Array.isArray(data) && data.length > 0) {
@@ -317,10 +316,10 @@ export default function PublicDisplay() {
             await fetch(`/api/announce/${ann.id}?_method=DELETE`, { method: 'POST' });
           }
         }
-      } catch (err) {
-        if (err.message !== "Failed to fetch") console.error("Gagal memuat pengumuman:", err);
+      } catch (err: any) {
+        // Ignore noise during rapid network ticks
       }
-    }, 1000);
+    }, 3000);
     return () => clearInterval(interval);
   }, [isAudioEnabled]);
 

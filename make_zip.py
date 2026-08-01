@@ -15,6 +15,7 @@ os.system('cp -r dist/* deploy_folder/')
 os.system('cp package_cpanel.json deploy_folder/package.json')
 os.system('cp app_cpanel.js deploy_folder/app.js')
 os.system('cp schema.sql deploy_folder/schema.sql')
+os.system('cp cpanel.htaccess deploy_folder/.htaccess')
 
 if os.path.exists('public/deploy_cpanel.zip'):
     os.remove('public/deploy_cpanel.zip')

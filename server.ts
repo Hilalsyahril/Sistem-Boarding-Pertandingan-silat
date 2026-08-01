@@ -29,8 +29,9 @@ const app = express();
 
 app.use(express.json());
 
-// Method override middleware for cPanel / ModSecurity blocking PUT/DELETE
+// Prevent cPanel / LiteSpeed mod_deflate double-encoding or decoding failures on API responses
 app.use((req, res, next) => {
+  res.setHeader("Cache-Control", "no-cache, no-transform");
   if (req.query._method && req.method === 'POST') {
     req.method = (req.query._method as string).toUpperCase();
   }
@@ -331,98 +332,136 @@ async function setupDatabaseConnection() {
   dotenv.config({ path: path.join(currentAppDir, ".env") });
   dotenv.config({ path: path.join(process.cwd(), ".env") });
 
-  const envDbUser = process.env.DB_USER || process.env.DB_USERNAME;
-  const envDbPass = process.env.DB_PASS || process.env.DB_PASSWORD || "";
-  const envDbName = process.env.DB_NAME || process.env.DB_DATABASE;
-  const envDbHost = process.env.DB_HOST;
-  const envDbPort = parseInt(process.env.DB_PORT || "3306", 10);
-  const envDbUrl = process.env.DATABASE_URL || (envDbHost && envDbName && envDbUser ? `mysql://${envDbUser}:${envDbPass}@${envDbHost}:${envDbPort}/${envDbName}` : undefined);
-
-  if (envDbUrl) {
+  const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || "https://pgqsknkwpoymvbilnnip.supabase.co";
+  let supabaseHost = process.env.DB_HOST;
+  if (!supabaseHost && supabaseUrl) {
     try {
-      if (envDbUrl.startsWith('postgres://') || envDbUrl.startsWith('postgresql://')) {
-        realPgPool = new pg.Pool({ connectionString: envDbUrl, connectionTimeoutMillis: 3000 });
-        realPgPool.on('error', (err) => console.error('PostgreSQL Pool Error:', err.message));
-        const client = await Promise.race([
-          realPgPool.connect(),
-          new Promise<never>((_, reject) => setTimeout(() => reject(new Error("connect ETIMEDOUT")), 3000))
-        ]);
-        client.release();
-        pgPool = {
-          type: "postgres",
-          query: async (text: string, params: any[] = []) => realPgPool!.query(text, params)
-        };
-        console.log("Connected to PostgreSQL Database successfully.");
-        return;
-      } else {
-        const poolConfig = {
-          host: envDbHost || "localhost",
-          port: envDbPort || 3306,
-          user: envDbUser,
-          password: envDbPass,
-          database: envDbName,
-          connectTimeout: 3000,
-          waitForConnections: true,
-          connectionLimit: 10
-        };
-        rawPool = mysql.createPool(poolConfig);
-        (rawPool as any).on('error', (err: any) => console.error('MySQL Pool Error:', err?.message || err));
-
-        await Promise.race([
-          rawPool.query("SELECT 1"),
-          new Promise<never>((_, reject) => setTimeout(() => reject(new Error("connect ETIMEDOUT")), 3000))
-        ]);
-
-        pgPool = {
-          type: "mysql",
-          query: async (text: string, params: any[] = []) => {
-            let newParams: any[] = [];
-            let hasParams = false;
-            let sql = text.replace(/\$([0-9]+)/g, (match, p1) => {
-              hasParams = true;
-              const index = parseInt(p1, 10) - 1;
-              newParams.push(params[index]);
-              return "?";
-            });
-            
-            let finalParams = hasParams ? newParams : params;
-            sql = sql.replace(/VARCHAR\(255\)/g, 'VARCHAR(255)');
-            sql = sql.replace(/INSERT INTO/g, 'INSERT IGNORE INTO');
-            sql = sql.replace(/ON CONFLICT[\s\S]*?DO NOTHING/g, '');
-            sql = sql.replace(/CAST\(NULLIF\(regexp_replace\(nomor_partai, '\[\^0-9\]', '', 'g'\), ''\) AS INTEGER\)/g, "CAST(NULLIF(REGEXP_REPLACE(nomor_partai, '[^0-9]', ''), '') AS INTEGER)");
-            
-            const isUpdateReturning = sql.includes("RETURNING *");
-            if (isUpdateReturning) {
-               sql = sql.replace("RETURNING *", "");
-            }
-
-            const [result] = await rawPool!.query(sql, finalParams);
-            
-            if (Array.isArray(result)) {
-              return { rows: result, rowCount: result.length };
-            } else {
-              const res = result as mysql.ResultSetHeader;
-              let rows: any[] = [];
-              if (isUpdateReturning && res.affectedRows > 0) {
-                try {
-                  const [selectResult] = await rawPool!.query("SELECT * FROM pesilat WHERE id = ?", [params[0]]);
-                  rows = selectResult as any[];
-                } catch {}
-              }
-              return { rows: rows, rowCount: res.affectedRows };
-            }
-          }
-        };
-        console.log("Connected to MySQL/MariaDB Database successfully.");
-        return;
+      const urlObj = new URL(supabaseUrl);
+      const projectRef = urlObj.hostname.split('.')[0];
+      if (projectRef && projectRef !== 'localhost') {
+        supabaseHost = `db.${projectRef}.supabase.co`;
       }
-    } catch (err: any) {
-      console.warn(`[DB Connection Warning] Could not connect to MariaDB/MySQL (${err.message || err}). Falling back to local JSON store.`);
-    }
-  } else {
-    console.log("No MySQL/MariaDB credentials set in env. Initializing local JSON store.");
+    } catch {}
+  }
+  if (!supabaseHost) {
+    supabaseHost = "db.pgqsknkwpoymvbilnnip.supabase.co";
   }
 
+  const envDbUser = process.env.DB_USER || process.env.DB_USERNAME || "postgres";
+  const envDbPass = process.env.DB_PASS || process.env.DB_PASSWORD || process.env.SUPABASE_DB_PASSWORD || "";
+  const envDbName = process.env.DB_NAME || process.env.DB_DATABASE || "postgres";
+  const envDbPort = parseInt(process.env.DB_PORT || "5432", 10);
+  
+  let targetPgUrl = process.env.DATABASE_URL || process.env.SUPABASE_DATABASE_URL || process.env.SUPABASE_DB_URL;
+  if (!targetPgUrl && envDbPass) {
+    targetPgUrl = `postgres://${envDbUser}:${encodeURIComponent(envDbPass)}@${supabaseHost}:${envDbPort}/${envDbName}`;
+  }
+
+  // 1. Try PostgreSQL / Supabase Connection First
+  if (targetPgUrl && (targetPgUrl.startsWith('postgres://') || targetPgUrl.startsWith('postgresql://'))) {
+    try {
+      console.log(`[Supabase DB] Attempting connection to Supabase PostgreSQL at ${supabaseHost}:${envDbPort}...`);
+      const isSupabaseOrSSL = targetPgUrl.includes('supabase') || targetPgUrl.includes('postgres') || process.env.DB_SSL === 'true';
+      
+      realPgPool = new pg.Pool({
+        connectionString: targetPgUrl,
+        ssl: isSupabaseOrSSL ? { rejectUnauthorized: false } : false,
+        connectionTimeoutMillis: 5000,
+        idleTimeoutMillis: 30000,
+      });
+      
+      realPgPool.on('error', (err) => console.error('[Supabase PostgreSQL Pool Error]:', err.message));
+
+      const client = await Promise.race([
+        realPgPool.connect(),
+        new Promise<never>((_, reject) => setTimeout(() => reject(new Error("Supabase connection timeout (5s)")), 5000))
+      ]);
+      client.release();
+
+      pgPool = {
+        type: "postgres",
+        query: async (text: string, params: any[] = []) => realPgPool!.query(text, params)
+      };
+      console.log(` Connected to Supabase PostgreSQL Database (${supabaseHost}) successfully!`);
+      return;
+    } catch (err: any) {
+      console.warn(`[Supabase DB Warning] Could not connect to Supabase PostgreSQL (${err.message || err}).`);
+      console.warn(`[Supabase DB Info] To connect to your Supabase PostgreSQL database: Set DATABASE_URL="postgres://postgres:[YOUR-PASSWORD]@${supabaseHost}:5432/postgres" in .env`);
+    }
+  } else if (!envDbPass && (targetPgUrl || supabaseHost)) {
+    console.log(`[Supabase DB Info] Supabase target host is ${supabaseHost}. Set DB_PASS or DATABASE_URL in .env to connect directly.`);
+  }
+
+  // 2. MySQL / MariaDB Fallback (if explicitly configured)
+  const mysqlUrl = process.env.DATABASE_URL;
+  if (mysqlUrl && (mysqlUrl.startsWith('mysql://') || mysqlUrl.startsWith('mariadb://'))) {
+    try {
+      const poolConfig = {
+        host: process.env.DB_HOST || "localhost",
+        port: parseInt(process.env.DB_PORT || "3306", 10),
+        user: envDbUser,
+        password: envDbPass,
+        database: envDbName,
+        connectTimeout: 3000,
+        waitForConnections: true,
+        connectionLimit: 10
+      };
+      rawPool = mysql.createPool(poolConfig);
+      (rawPool as any).on('error', (err: any) => console.error('MySQL Pool Error:', err?.message || err));
+
+      await Promise.race([
+        rawPool.query("SELECT 1"),
+        new Promise<never>((_, reject) => setTimeout(() => reject(new Error("connect ETIMEDOUT")), 3000))
+      ]);
+
+      pgPool = {
+        type: "mysql",
+        query: async (text: string, params: any[] = []) => {
+          let newParams: any[] = [];
+          let hasParams = false;
+          let sql = text.replace(/\$([0-9]+)/g, (match, p1) => {
+            hasParams = true;
+            const index = parseInt(p1, 10) - 1;
+            newParams.push(params[index]);
+            return "?";
+          });
+          
+          let finalParams = hasParams ? newParams : params;
+          sql = sql.replace(/VARCHAR\(255\)/g, 'VARCHAR(255)');
+          sql = sql.replace(/INSERT INTO/g, 'INSERT IGNORE INTO');
+          sql = sql.replace(/ON CONFLICT[\s\S]*?DO NOTHING/g, '');
+          sql = sql.replace(/CAST\(NULLIF\(regexp_replace\(nomor_partai, '\[\^0-9\]', '', 'g'\), ''\) AS INTEGER\)/g, "CAST(NULLIF(REGEXP_REPLACE(nomor_partai, '[^0-9]', ''), '') AS INTEGER)");
+          
+          const isUpdateReturning = sql.includes("RETURNING *");
+          if (isUpdateReturning) {
+             sql = sql.replace("RETURNING *", "");
+          }
+
+          const [result] = await rawPool!.query(sql, finalParams);
+          
+          if (Array.isArray(result)) {
+            return { rows: result, rowCount: result.length };
+          } else {
+            const res = result as mysql.ResultSetHeader;
+            let rows: any[] = [];
+            if (isUpdateReturning && res.affectedRows > 0) {
+              try {
+                const [selectResult] = await rawPool!.query("SELECT * FROM pesilat WHERE id = ?", [params[0]]);
+                rows = selectResult as any[];
+              } catch {}
+            }
+            return { rows: rows, rowCount: res.affectedRows };
+          }
+        }
+      };
+      console.log("Connected to MySQL/MariaDB Database successfully.");
+      return;
+    } catch (err: any) {
+      console.warn(`[DB Connection Warning] Could not connect to MariaDB/MySQL (${err.message || err}).`);
+    }
+  }
+
+  // 3. Fallback to Local SQLite or JSON File DB for offline operations
   pgPool = createSqlitePool() || createJsonFilePool();
 }
 
@@ -1068,7 +1107,13 @@ async function startServer() {
   if (!isProd) {
     const viteModule = "vite";
     const { createServer: createViteServer } = await import(viteModule);
-    const vite = await createViteServer({ server: { middlewareMode: true }, appType: "spa" });
+    const vite = await createViteServer({
+      server: {
+        middlewareMode: true,
+        hmr: false
+      },
+      appType: "spa"
+    });
     app.use(vite.middlewares);
   } else {
     const distPath = typeof __dirname !== "undefined" ? __dirname : path.join(process.cwd(), "dist");
