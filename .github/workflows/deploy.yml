@@ -25,28 +25,26 @@ jobs:
     - name: Build Application
       run: npm run build
 
-    - name: Prepare Deployment
+    - name: Prepare Deployment Directory
       run: |
         rm -rf deploy_folder && mkdir -p deploy_folder
-        # Salin ISI folder hasil build (dist) yang berisi UI & Server
+        # Copy built files (index.html, assets, server.cjs)
         cp -r dist/* deploy_folder/
         
-        # Buat package.json khusus production untuk cPanel
+        # Create app.js entry point for cPanel Phusion Passenger
+        echo "require('./server.cjs');" > deploy_folder/app.js
+        
+        # Minimal package.json for cPanel Node.js Selector reference
         cat << 'PKG' > deploy_folder/package.json
         {
           "name": "boarding-silat-prod",
           "version": "1.0.0",
-          "dependencies": {
-            "express": "^4.19.2",
-            "mysql2": "^3.9.8",
-            "pg": "^8.11.5",
-            "dotenv": "^16.4.5"
+          "main": "app.js",
+          "scripts": {
+            "start": "node app.js"
           }
         }
         PKG
-        
-        # Gunakan server.cjs sebagai app.js (Entry point cPanel)
-        echo "require('./server.cjs');" > deploy_folder/app.js
 
     - name: Deploy to FTP
       uses: SamKirkland/FTP-Deploy-Action@v4.3.5
