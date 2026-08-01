@@ -37,10 +37,10 @@ jobs:
           "name": "boarding-silat-prod",
           "version": "1.0.0",
           "dependencies": {
-            "express": "^4.21.2",
-            "mysql2": "^3.11.0",
-            "pg": "^8.13.1",
-            "dotenv": "^17.2.3"
+            "express": "^4.19.2",
+            "mysql2": "^3.9.8",
+            "pg": "^8.11.5",
+            "dotenv": "^16.4.5"
           }
         }
         PKG
