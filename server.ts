@@ -94,17 +94,16 @@ function createSqlitePool() {
 }
 
 async function setupDatabaseConnection() {
-  if (DB_URL) {
-    let finalDbUrl = DB_URL;
-    if (finalDbUrl.includes('@localhost')) {
-      finalDbUrl = finalDbUrl.replace('@localhost', '@127.0.0.1');
-    } else if (finalDbUrl.includes('//localhost')) {
-      finalDbUrl = finalDbUrl.replace('//localhost', '//127.0.0.1');
-    }
+  const dbUser = process.env.DB_USER || process.env.DB_USERNAME || "root";
+  const dbPass = process.env.DB_PASS || process.env.DB_PASSWORD || "";
+  const dbName = process.env.DB_NAME || process.env.DB_DATABASE || "test";
+  const dbHost = process.env.DB_HOST || "localhost";
+  const dbPort = parseInt(process.env.DB_PORT || "3306", 10);
 
+  if (DB_URL) {
     try {
       if (isPostgres) {
-        realPgPool = new pg.Pool({ connectionString: finalDbUrl, connectionTimeoutMillis: 3000 });
+        realPgPool = new pg.Pool({ connectionString: DB_URL, connectionTimeoutMillis: 3000 });
         realPgPool.on('error', (err) => {
           console.error('Unexpected error on idle PostgreSQL client', err.message);
         });
@@ -123,7 +122,20 @@ async function setupDatabaseConnection() {
         console.log("Connected to PostgreSQL Database successfully.");
         return;
       } else {
-        rawPool = mysql.createPool({ uri: finalDbUrl, connectTimeout: 3000 });
+        // Try connect via MySQL pool with URI or individual host/user params
+        let poolConfig: any = { uri: DB_URL, connectTimeout: 3000 };
+        if (process.env.DB_HOST) {
+          poolConfig = {
+            host: dbHost,
+            port: dbPort,
+            user: dbUser,
+            password: dbPass,
+            database: dbName,
+            connectTimeout: 3000
+          };
+        }
+        
+        rawPool = mysql.createPool(poolConfig);
         await Promise.race([
           rawPool.query("SELECT 1"),
           new Promise<never>((_, reject) => setTimeout(() => reject(new Error("connect ETIMEDOUT")), 3000))
@@ -161,8 +173,10 @@ async function setupDatabaseConnection() {
               const res = result as mysql.ResultSetHeader;
               let rows: any[] = [];
               if (isUpdateReturning && res.affectedRows > 0) {
-                const [selectResult] = await rawPool!.query("SELECT * FROM pesilat WHERE id = ?", [params[0]]);
-                rows = selectResult as any[];
+                try {
+                  const [selectResult] = await rawPool!.query("SELECT * FROM pesilat WHERE id = ?", [params[0]]);
+                  rows = selectResult as any[];
+                } catch {}
               }
               return { rows: rows, rowCount: res.affectedRows };
             }
@@ -183,10 +197,14 @@ async function setupDatabaseConnection() {
 
 async function initDb() {
   if (!pgPool) return;
-  await pgPool.query(`CREATE TABLE IF NOT EXISTS pengaturan_arena (
-      id VARCHAR(255) PRIMARY KEY,
-      jumlah_arena INTEGER DEFAULT 3
-    )`);
+  
+  try {
+    await pgPool.query(`CREATE TABLE IF NOT EXISTS pengaturan_arena (
+        id VARCHAR(255) PRIMARY KEY,
+        jumlah_arena INTEGER DEFAULT 3
+      )`);
+  } catch(e: any) { console.error("Create pengaturan_arena table error:", e.message); }
+
   try {
     await pgPool.query(`ALTER TABLE pengaturan_arena ADD COLUMN judul_aplikasi VARCHAR(255) DEFAULT 'SISTEM BOARDING PENCAK SILAT'`);
   } catch(e) {}
@@ -194,56 +212,71 @@ async function initDb() {
     await pgPool.query(`ALTER TABLE pengaturan_arena ADD COLUMN auto_next BOOLEAN DEFAULT true`);
   } catch(e) {}
 
-  await pgPool.query(`CREATE TABLE IF NOT EXISTS pesilat (
-      id VARCHAR(255) PRIMARY KEY,
-      nomor_urut INTEGER DEFAULT 0,
-      nomor_partai VARCHAR(255),
-      nama_pesilat VARCHAR(255),
-      kontingen VARCHAR(255),
-      nama_pesilat_biru VARCHAR(255),
-      kontingen_biru VARCHAR(255),
-      kelas VARCHAR(255),
-      kategori VARCHAR(255),
-      gender VARCHAR(255),
-      arena INTEGER,
-      is_playing BOOLEAN DEFAULT false,
-      timer_duration INTEGER,
-      timer_seconds_left INTEGER,
-      timer_running BOOLEAN DEFAULT false,
-      timer_last_updated_at BIGINT,
-      is_done BOOLEAN DEFAULT false
-    )`);
+  try {
+    await pgPool.query(`CREATE TABLE IF NOT EXISTS pesilat (
+        id VARCHAR(255) PRIMARY KEY,
+        nomor_urut INTEGER DEFAULT 0,
+        nomor_partai VARCHAR(255),
+        nama_pesilat VARCHAR(255),
+        kontingen VARCHAR(255),
+        nama_pesilat_biru VARCHAR(255),
+        kontingen_biru VARCHAR(255),
+        kelas VARCHAR(255),
+        kategori VARCHAR(255),
+        gender VARCHAR(255),
+        arena INTEGER,
+        is_playing BOOLEAN DEFAULT false,
+        timer_duration INTEGER,
+        timer_seconds_left INTEGER,
+        timer_running BOOLEAN DEFAULT false,
+        timer_last_updated_at BIGINT,
+        is_done BOOLEAN DEFAULT false
+      )`);
+  } catch(e: any) { console.error("Create pesilat table error:", e.message); }
+
   try {
     await pgPool.query(`ALTER TABLE pesilat ADD COLUMN nomor_urut INTEGER DEFAULT 0`);
   } catch(e) {}
-  await pgPool.query(`CREATE TABLE IF NOT EXISTS admin_users (
-      id VARCHAR(255) PRIMARY KEY,
-      username VARCHAR(255) UNIQUE,
-      password VARCHAR(255),
-      token VARCHAR(255)
-    )`);
-  await pgPool.query(`CREATE TABLE IF NOT EXISTS operator_users (
-      id VARCHAR(255) PRIMARY KEY,
-      username VARCHAR(255) UNIQUE,
-      password VARCHAR(255),
-      token VARCHAR(255)
-    )`);
+
+  try {
+    await pgPool.query(`CREATE TABLE IF NOT EXISTS admin_users (
+        id VARCHAR(255) PRIMARY KEY,
+        username VARCHAR(255) UNIQUE,
+        password VARCHAR(255),
+        token VARCHAR(255)
+      )`);
+  } catch(e: any) { console.error("Create admin_users error:", e.message); }
+
+  try {
+    await pgPool.query(`CREATE TABLE IF NOT EXISTS operator_users (
+        id VARCHAR(255) PRIMARY KEY,
+        username VARCHAR(255) UNIQUE,
+        password VARCHAR(255),
+        token VARCHAR(255)
+      )`);
+  } catch(e: any) { console.error("Create operator_users error:", e.message); }
   
-  if (pgPool.type === "sqlite") {
-    await pgPool.query(`INSERT OR IGNORE INTO pengaturan_arena (id, jumlah_arena) VALUES ('00000000-0000-0000-0000-000000000001', 3);`);
-  } else {
-    await pgPool.query(`INSERT INTO pengaturan_arena (id, jumlah_arena) VALUES ('00000000-0000-0000-0000-000000000001', 3) ON CONFLICT (id) DO NOTHING;`);
-  }
-  
-  // Seed default admin user
-  const adminCheck = await pgPool.query(`SELECT * FROM admin_users WHERE username = 'operatorDB'`);
-  if (adminCheck.rows.length === 0) {
-    if (pgPool.type === "sqlite") {
-      await pgPool.query(`INSERT OR IGNORE INTO admin_users (id, username, password) VALUES ('1', 'operatorDB', 'silat2026');`);
-    } else {
-      await pgPool.query(`INSERT INTO admin_users (id, username, password) VALUES ('1', 'operatorDB', 'silat2026') ON CONFLICT (username) DO NOTHING;`);
+  try {
+    const existing = await pgPool.query(`SELECT * FROM pengaturan_arena WHERE id = $1`, ['00000000-0000-0000-0000-000000000001']);
+    if (!existing.rows || existing.rows.length === 0) {
+      if (pgPool.type === "sqlite") {
+        await pgPool.query(`INSERT OR IGNORE INTO pengaturan_arena (id, jumlah_arena) VALUES ('00000000-0000-0000-0000-000000000001', 3);`);
+      } else {
+        await pgPool.query(`INSERT INTO pengaturan_arena (id, jumlah_arena) VALUES ('00000000-0000-0000-0000-000000000001', 3);`);
+      }
     }
-  }
+  } catch (e: any) { console.error("Insert default pengaturan_arena error:", e.message); }
+  
+  try {
+    const adminCheck = await pgPool.query(`SELECT * FROM admin_users WHERE username = $1`, ['operatorDB']);
+    if (!adminCheck.rows || adminCheck.rows.length === 0) {
+      if (pgPool.type === "sqlite") {
+        await pgPool.query(`INSERT OR IGNORE INTO admin_users (id, username, password) VALUES ('1', 'operatorDB', 'silat2026');`);
+      } else {
+        await pgPool.query(`INSERT INTO admin_users (id, username, password) VALUES ('1', 'operatorDB', 'silat2026');`);
+      }
+    }
+  } catch (e: any) { console.error("Insert default admin user error:", e.message); }
 }
 
 // Convert SQLite integer booleans to true booleans
@@ -800,13 +833,6 @@ app.post("/api/arena/:arena/undo", async (req, res) => {
 });
 
 async function startServer() {
-  try {
-    await setupDatabaseConnection();
-    await initDb();
-  } catch (err: any) {
-    console.error("Database setup or init error:", err.message || err);
-  }
-
   const isProd = process.env.NODE_ENV === "production" || !fs.existsSync(path.join(process.cwd(), "vite.config.ts"));
   if (!isProd) {
     const viteModule = "vite";
@@ -862,6 +888,7 @@ async function startServer() {
     });
   }
 
+  // Start HTTP server immediately
   if (process.env.PORT) {
     app.listen(process.env.PORT, () => {
       console.log(`Server running on port/socket ${process.env.PORT}`);
@@ -871,6 +898,11 @@ async function startServer() {
       console.log(`Server running at http://0.0.0.0:3000`);
     });
   }
+
+  // Asynchronously setup DB connection and tables in background without blocking server startup
+  setupDatabaseConnection()
+    .then(() => initDb())
+    .catch((err) => console.error("Database setup or init error:", err.message || err));
 }
 
 startServer();
