@@ -6,6 +6,14 @@ import dotenv from "dotenv";
 import mysql from "mysql2/promise";
 import pg from "pg";
 
+// Prevent process crashes on cPanel Passenger
+process.on('uncaughtException', (err) => {
+  console.error('[Uncaught Exception]:', err);
+});
+process.on('unhandledRejection', (reason) => {
+  console.error('[Unhandled Rejection]:', reason);
+});
+
 let DatabaseSync: any = null;
 try {
   DatabaseSync = require("node:sqlite").DatabaseSync;
@@ -13,7 +21,8 @@ try {
   // node:sqlite not supported on Node < 22
 }
 
-dotenv.config();
+dotenv.config({ path: path.join(__dirname, ".env") });
+dotenv.config({ path: path.join(process.cwd(), ".env") });
 
 const app = express();
 
@@ -27,30 +36,258 @@ app.use((req, res, next) => {
   next();
 });
 
-const PORT = process.env.PORT || 3000;
-
-const dbUser = process.env.DB_USER || process.env.DB_USERNAME || "root";
-const dbPass = process.env.DB_PASS || process.env.DB_PASSWORD || "";
-const dbName = process.env.DB_NAME || process.env.DB_DATABASE || "test";
-const dbHost = process.env.DB_HOST || "localhost";
-const dbPort = process.env.DB_PORT || "3306";
-
-const DB_URL = process.env.DATABASE_URL || (process.env.DB_HOST || process.env.DB_DATABASE || process.env.DB_USERNAME ? `mysql://${dbUser}:${dbPass}@${dbHost}:${dbPort}/${dbName}` : undefined);
-
-const isPostgres = DB_URL ? DB_URL.startsWith('postgres://') || DB_URL.startsWith('postgresql://') : false;
-
 let rawPool: mysql.Pool | null = null;
 let realPgPool: pg.Pool | null = null;
 let pgPool: any = null;
+
+function createJsonFilePool() {
+  const jsonPath = path.join(process.cwd(), "local_data.json");
+  
+  let store: {
+    pengaturan_arena: any[];
+    pesilat: any[];
+    admin_users: any[];
+    operator_users: any[];
+  } = {
+    pengaturan_arena: [{ id: '00000000-0000-0000-0000-000000000001', jumlah_arena: 3, judul_aplikasi: 'SISTEM BOARDING PENCAK SILAT', auto_next: true }],
+    pesilat: [],
+    admin_users: [{ id: '1', username: 'operatorDB', password: 'silat2026', token: null }],
+    operator_users: []
+  };
+
+  try {
+    if (fs.existsSync(jsonPath)) {
+      const data = fs.readFileSync(jsonPath, "utf-8");
+      const parsed = JSON.parse(data);
+      if (parsed) {
+        store = { ...store, ...parsed };
+      }
+    } else {
+      fs.writeFileSync(jsonPath, JSON.stringify(store, null, 2));
+    }
+  } catch (e: any) {
+    console.warn("[JSON DB] Error reading/writing json store:", e.message);
+  }
+
+  const saveStore = () => {
+    try {
+      fs.writeFileSync(jsonPath, JSON.stringify(store, null, 2));
+    } catch (e: any) {
+      console.warn("[JSON DB] Error saving store:", e.message);
+    }
+  };
+
+  console.log("[DB] Initialized JSON File DB fallback at:", jsonPath);
+
+  return {
+    type: "json",
+    query: async (text: string, params: any[] = []) => {
+      const trimmed = text.trim();
+      const upper = trimmed.toUpperCase();
+
+      // SELECT queries
+      if (upper.startsWith("SELECT")) {
+        if (upper.includes("FROM PENGATURAN_ARENA")) {
+          return { rows: store.pengaturan_arena, rowCount: store.pengaturan_arena.length };
+        }
+        if (upper.includes("FROM PESILAT")) {
+          if (upper.includes("WHERE ID =")) {
+            const idParam = params[0];
+            const found = store.pesilat.filter(p => p.id == idParam);
+            return { rows: found, rowCount: found.length };
+          }
+          if (upper.includes("WHERE ARENA =")) {
+            const arenaParam = params[0];
+            const found = store.pesilat.filter(p => p.arena == arenaParam);
+            return { rows: found, rowCount: found.length };
+          }
+          return { rows: store.pesilat, rowCount: store.pesilat.length };
+        }
+        if (upper.includes("FROM ADMIN_USERS")) {
+          if (upper.includes("WHERE USERNAME =") && upper.includes("AND PASSWORD =")) {
+            const found = store.admin_users.filter(u => u.username === params[0] && u.password === params[1]);
+            return { rows: found, rowCount: found.length };
+          }
+          if (upper.includes("WHERE USERNAME =")) {
+            const found = store.admin_users.filter(u => u.username === params[0]);
+            return { rows: found, rowCount: found.length };
+          }
+          if (upper.includes("WHERE TOKEN =")) {
+            const found = store.admin_users.filter(u => u.token === params[0]);
+            return { rows: found, rowCount: found.length };
+          }
+          return { rows: store.admin_users, rowCount: store.admin_users.length };
+        }
+        if (upper.includes("FROM OPERATOR_USERS")) {
+          if (upper.includes("WHERE USERNAME =") && upper.includes("AND PASSWORD =")) {
+            const found = store.operator_users.filter(u => u.username === params[0] && u.password === params[1]);
+            return { rows: found, rowCount: found.length };
+          }
+          if (upper.includes("WHERE USERNAME =")) {
+            const found = store.operator_users.filter(u => u.username === params[0]);
+            return { rows: found, rowCount: found.length };
+          }
+          if (upper.includes("WHERE TOKEN =")) {
+            const found = store.operator_users.filter(u => u.token === params[0]);
+            return { rows: found, rowCount: found.length };
+          }
+          return { rows: store.operator_users, rowCount: store.operator_users.length };
+        }
+        return { rows: [], rowCount: 0 };
+      }
+
+      // INSERT queries
+      if (upper.startsWith("INSERT")) {
+        if (upper.includes("INTO PESILAT")) {
+          const newPesilat: any = {
+            id: params[0],
+            nomor_partai: params[1],
+            nama_pesilat: params[2],
+            kontingen: params[3],
+            nama_pesilat_biru: params[4],
+            kontingen_biru: params[5],
+            kelas: params[6],
+            kategori: params[7],
+            gender: params[8],
+            arena: params[9],
+            is_playing: params[10],
+            timer_duration: params[11],
+            timer_seconds_left: params[12],
+            timer_running: params[13],
+            timer_last_updated_at: params[14],
+            is_done: params[15],
+            nomor_urut: params[16] || 0
+          };
+          const idx = store.pesilat.findIndex(p => p.id == newPesilat.id);
+          if (idx >= 0) store.pesilat[idx] = newPesilat;
+          else store.pesilat.push(newPesilat);
+          saveStore();
+          return { rows: [newPesilat], rowCount: 1 };
+        }
+        if (upper.includes("INTO OPERATOR_USERS")) {
+          const newOp = { id: params[0], username: params[1], password: params[2], token: null };
+          store.operator_users.push(newOp);
+          saveStore();
+          return { rows: [newOp], rowCount: 1 };
+        }
+        if (upper.includes("INTO ADMIN_USERS")) {
+          const newAdmin = { id: params[0], username: params[1], password: params[2], token: null };
+          if (!store.admin_users.some(a => a.username === newAdmin.username)) {
+            store.admin_users.push(newAdmin);
+            saveStore();
+          }
+          return { rows: [newAdmin], rowCount: 1 };
+        }
+        if (upper.includes("INTO PENGATURAN_ARENA")) {
+          const newConf = { id: params[0], jumlah_arena: params[1], judul_aplikasi: 'SISTEM BOARDING PENCAK SILAT', auto_next: true };
+          if (!store.pengaturan_arena.some(c => c.id === newConf.id)) {
+            store.pengaturan_arena.push(newConf);
+            saveStore();
+          }
+          return { rows: [newConf], rowCount: 1 };
+        }
+      }
+
+      // UPDATE queries
+      if (upper.startsWith("UPDATE")) {
+        if (upper.includes("PENGATURAN_ARENA")) {
+          if (store.pengaturan_arena.length > 0) {
+            store.pengaturan_arena[0].jumlah_arena = params[0];
+            store.pengaturan_arena[0].judul_aplikasi = params[1];
+            store.pengaturan_arena[0].auto_next = params[2];
+            saveStore();
+          }
+          return { rows: store.pengaturan_arena, rowCount: 1 };
+        }
+        if (upper.includes("PESILAT")) {
+          const id = params[params.length - 1];
+          const item = store.pesilat.find(p => p.id == id);
+          if (item) {
+            if (upper.includes("IS_PLAYING =") && upper.includes("TIMER_SECONDS_LEFT =")) {
+              item.is_playing = params[0];
+              item.timer_seconds_left = params[1];
+              item.timer_running = params[2];
+              item.timer_last_updated_at = params[3];
+            } else if (upper.includes("TIMER_SECONDS_LEFT =") && upper.includes("TIMER_RUNNING =")) {
+              item.timer_seconds_left = params[0];
+              item.timer_running = params[1];
+              item.timer_last_updated_at = params[2];
+            } else if (upper.includes("IS_DONE =")) {
+              item.is_done = params[0];
+              item.is_playing = params[1];
+              item.timer_running = params[2];
+            } else if (upper.includes("NOMOR_PARTAI =")) {
+              item.nomor_partai = params[0];
+              item.nama_pesilat = params[1];
+              item.kontingen = params[2];
+              item.nama_pesilat_biru = params[3];
+              item.kontingen_biru = params[4];
+              item.kelas = params[5];
+              item.kategori = params[6];
+              item.gender = params[7];
+              item.arena = params[8];
+              item.timer_duration = params[9];
+              item.timer_seconds_left = params[10];
+              if (params[11] !== undefined) item.nomor_urut = params[11];
+            }
+            saveStore();
+            return { rows: [item], rowCount: 1 };
+          }
+        }
+        if (upper.includes("ADMIN_USERS")) {
+          if (upper.includes("SET TOKEN =")) {
+            const u = store.admin_users.find(x => x.id == params[1]);
+            if (u) u.token = params[0];
+          } else if (upper.includes("SET PASSWORD =")) {
+            const u = store.admin_users.find(x => x.username == params[1]);
+            if (u) u.password = params[0];
+          }
+          saveStore();
+          return { rows: [], rowCount: 1 };
+        }
+        if (upper.includes("OPERATOR_USERS")) {
+          if (upper.includes("SET TOKEN =")) {
+            const u = store.operator_users.find(x => x.id == params[1]);
+            if (u) u.token = params[0];
+          } else if (upper.includes("SET PASSWORD =")) {
+            const u = store.operator_users.find(x => x.id == params[1]);
+            if (u) u.password = params[0];
+          }
+          saveStore();
+          return { rows: [], rowCount: 1 };
+        }
+      }
+
+      // DELETE queries
+      if (upper.startsWith("DELETE")) {
+        if (upper.includes("FROM PESILAT")) {
+          if (upper.includes("WHERE ID =")) {
+            store.pesilat = store.pesilat.filter(p => p.id != params[0]);
+          } else {
+            store.pesilat = [];
+          }
+          saveStore();
+          return { rows: [], rowCount: 1 };
+        }
+        if (upper.includes("FROM OPERATOR_USERS")) {
+          if (upper.includes("WHERE ID =")) {
+            store.operator_users = store.operator_users.filter(u => u.id != params[0]);
+          }
+          saveStore();
+          return { rows: [], rowCount: 1 };
+        }
+      }
+
+      return { rows: [], rowCount: 0 };
+    }
+  };
+}
 
 function createSqlitePool() {
   try {
     if (!DatabaseSync) {
       console.warn("[DB] node:sqlite is not supported on this Node.js runtime version.");
-      return {
-        type: "none",
-        query: async () => ({ rows: [], rowCount: 0 })
-      };
+      return null;
     }
     const dbPath = path.join(process.cwd(), "local_data.sqlite");
     const sqliteDb = new DatabaseSync(dbPath);
@@ -60,7 +297,6 @@ function createSqlitePool() {
       query: async (text: string, params: any[] = []) => {
         let sql = text.replace(/\$([0-9]+)/g, "?$1");
         
-        // PostgreSQL to SQLite query adjustments
         sql = sql.replace(/VARCHAR\(255\)/g, 'TEXT');
         sql = sql.replace(/BIGINT/g, 'INTEGER');
         sql = sql.replace(/BOOLEAN DEFAULT false/g, 'INTEGER DEFAULT 0');
@@ -71,7 +307,6 @@ function createSqlitePool() {
         const trimmed = sql.trim().toUpperCase();
         const isSelect = trimmed.startsWith("SELECT") || sql.includes("RETURNING");
 
-        // Convert booleans to integers for sqlite
         const safeParams = params.map(p => typeof p === 'boolean' ? (p ? 1 : 0) : p);
 
         const stmt = sqliteDb.prepare(sql);
@@ -86,56 +321,51 @@ function createSqlitePool() {
     };
   } catch (e: any) {
     console.error("[DB] Failed to create SQLite pool:", e.message || e);
-    return {
-      type: "none",
-      query: async () => ({ rows: [], rowCount: 0 })
-    };
+    return null;
   }
 }
 
 async function setupDatabaseConnection() {
-  const dbUser = process.env.DB_USER || process.env.DB_USERNAME || "root";
-  const dbPass = process.env.DB_PASS || process.env.DB_PASSWORD || "";
-  const dbName = process.env.DB_NAME || process.env.DB_DATABASE || "test";
-  const dbHost = process.env.DB_HOST || "localhost";
-  const dbPort = parseInt(process.env.DB_PORT || "3306", 10);
+  dotenv.config({ path: path.join(__dirname, ".env") });
+  dotenv.config({ path: path.join(process.cwd(), ".env") });
 
-  if (DB_URL) {
+  const envDbUser = process.env.DB_USER || process.env.DB_USERNAME;
+  const envDbPass = process.env.DB_PASS || process.env.DB_PASSWORD || "";
+  const envDbName = process.env.DB_NAME || process.env.DB_DATABASE;
+  const envDbHost = process.env.DB_HOST;
+  const envDbPort = parseInt(process.env.DB_PORT || "3306", 10);
+  const envDbUrl = process.env.DATABASE_URL || (envDbHost && envDbName && envDbUser ? `mysql://${envDbUser}:${envDbPass}@${envDbHost}:${envDbPort}/${envDbName}` : undefined);
+
+  if (envDbUrl) {
     try {
-      if (isPostgres) {
-        realPgPool = new pg.Pool({ connectionString: DB_URL, connectionTimeoutMillis: 3000 });
-        realPgPool.on('error', (err) => {
-          console.error('Unexpected error on idle PostgreSQL client', err.message);
-        });
+      if (envDbUrl.startsWith('postgres://') || envDbUrl.startsWith('postgresql://')) {
+        realPgPool = new pg.Pool({ connectionString: envDbUrl, connectionTimeoutMillis: 3000 });
+        realPgPool.on('error', (err) => console.error('PostgreSQL Pool Error:', err.message));
         const client = await Promise.race([
           realPgPool.connect(),
           new Promise<never>((_, reject) => setTimeout(() => reject(new Error("connect ETIMEDOUT")), 3000))
         ]);
         client.release();
-        
         pgPool = {
           type: "postgres",
-          query: async (text: string, params: any[] = []) => {
-            return await realPgPool!.query(text, params);
-          }
+          query: async (text: string, params: any[] = []) => realPgPool!.query(text, params)
         };
         console.log("Connected to PostgreSQL Database successfully.");
         return;
       } else {
-        // Try connect via MySQL pool with URI or individual host/user params
-        let poolConfig: any = { uri: DB_URL, connectTimeout: 3000 };
-        if (process.env.DB_HOST) {
-          poolConfig = {
-            host: dbHost,
-            port: dbPort,
-            user: dbUser,
-            password: dbPass,
-            database: dbName,
-            connectTimeout: 3000
-          };
-        }
-        
+        const poolConfig = {
+          host: envDbHost || "localhost",
+          port: envDbPort || 3306,
+          user: envDbUser,
+          password: envDbPass,
+          database: envDbName,
+          connectTimeout: 3000,
+          waitForConnections: true,
+          connectionLimit: 10
+        };
         rawPool = mysql.createPool(poolConfig);
+        rawPool.on('error', (err) => console.error('MySQL Pool Error:', err.message));
+
         await Promise.race([
           rawPool.query("SELECT 1"),
           new Promise<never>((_, reject) => setTimeout(() => reject(new Error("connect ETIMEDOUT")), 3000))
@@ -154,7 +384,6 @@ async function setupDatabaseConnection() {
             });
             
             let finalParams = hasParams ? newParams : params;
-            
             sql = sql.replace(/VARCHAR\(255\)/g, 'VARCHAR(255)');
             sql = sql.replace(/INSERT INTO/g, 'INSERT IGNORE INTO');
             sql = sql.replace(/ON CONFLICT[\s\S]*?DO NOTHING/g, '');
@@ -182,17 +411,17 @@ async function setupDatabaseConnection() {
             }
           }
         };
-        console.log("Connected to MySQL Database successfully.");
+        console.log("Connected to MySQL/MariaDB Database successfully.");
         return;
       }
     } catch (err: any) {
-      console.warn(`[DB Connection Warning] Could not connect to remote DB (${err.message || err}). Falling back to local SQLite database.`);
+      console.warn(`[DB Connection Warning] Could not connect to MariaDB/MySQL (${err.message || err}). Falling back to local JSON store.`);
     }
   } else {
-    console.log("No DATABASE_URL set. Initializing local SQLite database.");
+    console.log("No MySQL/MariaDB credentials set in env. Initializing local JSON store.");
   }
 
-  pgPool = createSqlitePool();
+  pgPool = createSqlitePool() || createJsonFilePool();
 }
 
 async function initDb() {
