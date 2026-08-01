@@ -357,30 +357,43 @@ export default function PublicDisplay() {
     return () => clearInterval(timer);
   }, []);
 
+  // Helper function to safely parse API JSON responses
+  const safeParseJson = async (res: Response) => {
+    const text = await res.text();
+    try {
+      return JSON.parse(text);
+    } catch {
+      if (text.startsWith("<!") || text.includes("<html")) {
+        throw new Error(`Server backend belum siap atau merespons HTML (HTTP ${res.status}).`);
+      }
+      throw new Error(`Respons tidak valid dari server: ${text.substring(0, 80)}`);
+    }
+  };
+
   // 1. Ambil status konfigurasi dan data awal
   const initApp = async (retriesLeft = 3, delayMs = 1500) => {
     try {
       setLoading(true);
       setError("");
       
-      // Ambil konfigurasi Supabase dari backend
+      // Ambil konfigurasi dari backend
       const configRes = await fetch(`/api/config-status?_t=${Date.now()}`);
-      const configData: ConfigStatus = await configRes.json();
+      const configData: ConfigStatus = await safeParseJson(configRes);
       setConfig(configData);
 
       // Ambil data jumlah arena awal
       const arenaRes = await fetch(`/api/pengaturan_arena?_t=${Date.now()}`);
-      const arenaData = await arenaRes.json();
+      const arenaData = await safeParseJson(arenaRes);
       const initialArenasCount = parseJumlahArena(arenaData);
       setJumlahArena(initialArenasCount);
-      if (arenaData && arenaData.length > 0) {
+      if (Array.isArray(arenaData) && arenaData.length > 0) {
         if (arenaData[0].judul_aplikasi) setJudulAplikasi(arenaData[0].judul_aplikasi);
         if (arenaData[0].auto_next !== undefined) setAutoNextMatch(arenaData[0].auto_next);
       }
 
       // Ambil data pesilat awal
       const pesilatRes = await fetch(`/api/pesilat?_t=${Date.now()}`);
-      const pesilatData = await pesilatRes.json();
+      const pesilatData = await safeParseJson(pesilatRes);
       const initialPesilats = Array.isArray(pesilatData) ? pesilatData : [];
       setPesilatList(initialPesilats);
 

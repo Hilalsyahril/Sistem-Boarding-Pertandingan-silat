@@ -29,7 +29,13 @@ app.use((req, res, next) => {
 
 const PORT = process.env.PORT || 3000;
 
-const DB_URL = process.env.DATABASE_URL || (process.env.DB_HOST ? `mysql://${process.env.DB_USER || "root"}:${process.env.DB_PASS || ""}@${process.env.DB_HOST}/${process.env.DB_NAME || "test"}` : undefined);
+const dbUser = process.env.DB_USER || process.env.DB_USERNAME || "root";
+const dbPass = process.env.DB_PASS || process.env.DB_PASSWORD || "";
+const dbName = process.env.DB_NAME || process.env.DB_DATABASE || "test";
+const dbHost = process.env.DB_HOST || "localhost";
+const dbPort = process.env.DB_PORT || "3306";
+
+const DB_URL = process.env.DATABASE_URL || (process.env.DB_HOST || process.env.DB_DATABASE || process.env.DB_USERNAME ? `mysql://${dbUser}:${dbPass}@${dbHost}:${dbPort}/${dbName}` : undefined);
 
 const isPostgres = DB_URL ? DB_URL.startsWith('postgres://') || DB_URL.startsWith('postgresql://') : false;
 
@@ -673,17 +679,30 @@ app.post("/api/tts", async (req, res) => {
 let activeAnnouncements: any[] = [];
 
 app.post("/api/announce", (req, res) => {
-  activeAnnouncements.push({ id: Date.now().toString(), ...req.body });
-  res.json({ success: true });
+  try {
+    const body = req.body || {};
+    activeAnnouncements.push({ id: Date.now().toString(), ...body });
+    res.json({ success: true });
+  } catch (error: any) {
+    res.status(200).json({ error: error.message, is_500: true });
+  }
 });
 
 app.get("/api/announce", (req, res) => {
-  res.json(activeAnnouncements);
+  try {
+    res.json(activeAnnouncements || []);
+  } catch (error: any) {
+    res.status(200).json({ error: error.message, is_500: true });
+  }
 });
 
 app.delete("/api/announce/:id", (req, res) => {
-  activeAnnouncements = activeAnnouncements.filter(a => a.id !== req.params.id);
-  res.json({ success: true });
+  try {
+    activeAnnouncements = activeAnnouncements.filter(a => a && a.id !== req.params.id);
+    res.json({ success: true });
+  } catch (error: any) {
+    res.status(200).json({ error: error.message, is_500: true });
+  }
 });
 
 app.get("/api/download-source", (req, res) => {
@@ -814,6 +833,20 @@ async function startServer() {
         filesInAssets: fs.existsSync(path.join(distPath, 'assets')) ? fs.readdirSync(path.join(distPath, 'assets')) : null,
         filesInRootAssets: fs.existsSync(path.join(rootPath, 'assets')) ? fs.readdirSync(path.join(rootPath, 'assets')) : null
       });
+    });
+
+    // Fallback handler for unmatched /api/* routes so they NEVER return HTML index.html
+    app.use("/api/*", (req, res) => {
+      res.status(404).json({ error: "API route not found", path: req.originalUrl, is_500: false });
+    });
+
+    // Global Express JSON error handler to guarantee API errors return JSON instead of HTML
+    app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+      console.error("[Global Server Error]:", err);
+      if (res.headersSent) {
+        return next(err);
+      }
+      res.status(200).json({ error: err?.message || "Internal Server Error", is_500: true });
     });
 
     app.get("*", (req, res) => {
